@@ -168,6 +168,32 @@ def create_tables():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_realtime_consumption_window ON consumption_aggregates_realtime(window_start, window_end)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_realtime_weather_window ON weather_aggregates_realtime(window_start, window_end)")
         
+        # Tabela për anomalies (bazuar në campus-energy-streaming-pipeline)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS anomalies (
+                id SERIAL PRIMARY KEY,
+                timestamp TIMESTAMP NOT NULL,
+                sensor_id VARCHAR(100),
+                building VARCHAR(50),
+                floor INTEGER,
+                electricity DOUBLE PRECISION,
+                water DOUBLE PRECISION,
+                anomaly_probability DOUBLE PRECISION,
+                anomaly_type VARCHAR(50),
+                sensor_type VARCHAR(50),
+                value DOUBLE PRECISION,
+                location GEOMETRY(POINT, 4326),
+                metadata JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Indekset për anomalies
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_timestamp ON anomalies(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_type ON anomalies(anomaly_type)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_sensor ON anomalies(sensor_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_location ON anomalies USING GIST(location)")
+        
         conn.commit()
         logger.info("Database tables created/verified")
     except Exception as e:
