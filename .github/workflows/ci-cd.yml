@@ -49,7 +49,22 @@ jobs:
       working-directory: SmartGrid_Project_Devops/docker/data-ingestion-service
       run: |
         pip install -r requirements.txt
+        python -c "from kafka import KafkaProducer; print('Kafka imports OK')"
         python -c "import app; print('Data Ingestion imports OK')"
+    
+    - name: Test Notification Service
+      working-directory: SmartGrid_Project_Devops/docker/notification-service
+      run: |
+        pip install -r requirements.txt
+        python -c "from kafka import KafkaProducer; print('Kafka imports OK')"
+        python -c "import app; print('Notification Service imports OK')"
+    
+    - name: Test Data Processing Service
+      working-directory: SmartGrid_Project_Devops/docker/data-processing-service
+      run: |
+        pip install -r requirements.txt
+        python -c "from kafka import KafkaProducer, KafkaConsumer; print('Kafka imports OK')"
+        python -c "import app; print('Data Processing imports OK')"
 
   # Job për build Docker images
   build:
