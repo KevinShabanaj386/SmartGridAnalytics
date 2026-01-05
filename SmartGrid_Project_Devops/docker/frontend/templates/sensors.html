@@ -221,13 +221,23 @@
     <script>
         let authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
         let sensorStatsChart = null;
+        let refreshInterval = null;
         
+        // Kontrollo nëse ka token
         if (!authToken) {
             window.location.href = '/';
         }
         
+        // Auto-refresh token nëse ka
+        function checkAuth() {
+            if (!authToken) {
+                window.location.href = '/';
+            }
+        }
+        
         async function ingestSensor(event) {
             event.preventDefault();
+            checkAuth();
             
             const data = {
                 sensor_id: document.getElementById('sensorId').value,
@@ -239,6 +249,9 @@
                 }
             };
             
+            const resultDiv = document.getElementById('ingestResult');
+            resultDiv.innerHTML = '<div style="padding: 10px; color: #666;">⏳ Dërgim në proces...</div>';
+            
             try {
                 const response = await fetch('/api/ingest-sensor', {
                     method: 'POST',
@@ -246,35 +259,42 @@
                         'Authorization': `Bearer ${authToken}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(data),
+                    credentials: 'include'
                 });
                 
                 const result = await response.json();
-                const resultDiv = document.getElementById('ingestResult');
                 
                 if (response.status === 201) {
                     resultDiv.innerHTML = `<div style="padding: 10px; background: #d4edda; color: #155724; border-radius: 5px;">
-                        ✅ Të dhënat u dërguan me sukses! Event ID: ${result.event_id}
+                        ✅ Të dhënat u dërguan me sukses!<br>
+                        <small>Event ID: ${result.event_id} | Topic: ${result.kafka_topic || 'N/A'}</small>
                     </div>`;
                     // Reload stats pas dërgimit
                     setTimeout(() => {
                         loadSensorStats();
                         loadSensorsList();
                     }, 1000);
+                } else if (response.status === 401) {
+                    // Token expired, redirect to login
+                    resultDiv.innerHTML = `<div style="padding: 10px; background: #fff3cd; color: #856404; border-radius: 5px;">
+                        ⚠️ Session ka skaduar. Ju lutem hyni përsëri.
+                    </div>`;
+                    setTimeout(() => window.location.href = '/', 2000);
                 } else {
                     resultDiv.innerHTML = `<div style="padding: 10px; background: #f8d7da; color: #721c24; border-radius: 5px;">
                         ❌ Error: ${result.error || 'Failed to ingest data'}
                     </div>`;
                 }
             } catch (error) {
-                document.getElementById('ingestResult').innerHTML = 
-                    `<div style="padding: 10px; background: #f8d7da; color: #721c24; border-radius: 5px;">
-                        ❌ Error: ${error.message}
-                    </div>`;
+                resultDiv.innerHTML = `<div style="padding: 10px; background: #f8d7da; color: #721c24; border-radius: 5px;">
+                    ❌ Error: ${error.message}
+                </div>`;
             }
         }
         
         async function loadSensorStats() {
+            checkAuth();
             const hours = document.getElementById('statsHours').value;
             const sensorType = document.getElementById('statsSensorType').value;
             
@@ -285,17 +305,24 @@
                 }
                 
                 const response = await fetch(url, {
-                    headers: {'Authorization': `Bearer ${authToken}`}
+                    headers: {'Authorization': `Bearer ${authToken}`},
+                    credentials: 'include'
                 });
+                
+                if (response.status === 401) {
+                    window.location.href = '/';
+                    return;
+                }
+                
                 const data = await response.json();
                 
                 if (data.status === 'success') {
                     updateSensorStatsChart(data.data);
                 } else {
-                    alert('Error: ' + (data.error || 'Failed to load stats'));
+                    console.error('Error loading stats:', data.error);
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                console.error('Error loading stats:', error);
             }
         }
         
@@ -306,9 +333,15 @@
                 sensorStatsChart.destroy();
             }
             
-            if (stats.length === 0) {
-                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-                ctx.fillText('Nuk ka të dhëna', 10, 50);
+            if (!stats || stats.length === 0) {
+                // Shfaq mesazh nëse nuk ka të dhëna
+                const container = document.getElementById('sensorStatsChart').parentElement;
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #666;">
+                        <p style="font-size: 16px;">📊 Nuk ka të dhëna për të shfaqur</p>
+                        <p style="font-size: 14px; margin-top: 10px;">Dërgoni të dhëna sensor për të parë statistikat</p>
+                    </div>
+                `;
                 return;
             }
             
@@ -327,51 +360,90 @@
                 return typeStats.reduce((sum, s) => sum + parseFloat(s.avg_value || 0), 0) / typeStats.length;
             });
             
+            const maxValues = types.map(type => {
+                const typeStats = byType[type];
+                return Math.max(...typeStats.map(s => parseFloat(s.max_value || 0)));
+            });
+            
+            const minValues = types.map(type => {
+                const typeStats = byType[type];
+                return Math.min(...typeStats.map(s => parseFloat(s.min_value || 0)));
+            });
+            
             sensorStatsChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: types,
-                    datasets: [{
-                        label: 'Mesatarja e Vlerave',
-                        data: avgValues,
-                        backgroundColor: [
-                            'rgba(102, 126, 234, 0.8)',
-                            'rgba(118, 75, 162, 0.8)',
-                            'rgba(255, 99, 132, 0.8)',
-                            'rgba(54, 162, 235, 0.8)'
-                        ]
-                    }]
+                    datasets: [
+                        {
+                            label: 'Mesatarja',
+                            data: avgValues,
+                            backgroundColor: 'rgba(102, 126, 234, 0.8)'
+                        },
+                        {
+                            label: 'Maksimumi',
+                            data: maxValues,
+                            backgroundColor: 'rgba(118, 75, 162, 0.8)'
+                        },
+                        {
+                            label: 'Minimumi',
+                            data: minValues,
+                            backgroundColor: 'rgba(255, 99, 132, 0.8)'
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
                         y: {beginAtZero: true}
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
                     }
                 }
             });
         }
         
         async function loadSensorsList() {
+            checkAuth();
             try {
                 const response = await fetch('/api/sensor-stats?hours=1', {
-                    headers: {'Authorization': `Bearer ${authToken}`}
+                    headers: {'Authorization': `Bearer ${authToken}`},
+                    credentials: 'include'
                 });
+                
+                if (response.status === 401) {
+                    window.location.href = '/';
+                    return;
+                }
+                
                 const data = await response.json();
                 
                 if (data.status === 'success') {
                     displaySensorsList(data.data);
+                } else {
+                    displaySensorsList([]);
                 }
             } catch (error) {
                 console.error('Error loading sensors:', error);
+                displaySensorsList([]);
             }
         }
         
         function displaySensorsList(stats) {
             const container = document.getElementById('sensorsList');
             
-            if (stats.length === 0) {
-                container.innerHTML = '<p>Nuk ka sensorë aktivë</p>';
+            if (!stats || stats.length === 0) {
+                container.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #666;">
+                        <p style="font-size: 18px; margin-bottom: 10px;">📡 Nuk ka sensorë aktivë</p>
+                        <p style="font-size: 14px;">Dërgoni të dhëna për të parë sensorët këtu</p>
+                    </div>
+                `;
                 return;
             }
             
@@ -381,25 +453,42 @@
                 if (!sensors[stat.sensor_id]) {
                     sensors[stat.sensor_id] = {
                         sensor_id: stat.sensor_id,
-                        types: {}
+                        types: {},
+                        count: 0
                     };
                 }
                 sensors[stat.sensor_id].types[stat.sensor_type] = stat;
+                sensors[stat.sensor_id].count += parseInt(stat.count || 0);
             });
             
             let html = '';
             Object.values(sensors).forEach(sensor => {
                 const types = Object.keys(sensor.types);
+                const typeColors = {
+                    'voltage': '#667eea',
+                    'current': '#764ba2',
+                    'power': '#f093fb',
+                    'frequency': '#4facfe'
+                };
+                
                 html += `
                     <div class="sensor-card">
-                        <h4>${sensor.sensor_id}</h4>
+                        <h4>📡 ${sensor.sensor_id}</h4>
+                        <div style="margin-bottom: 10px; color: #666; font-size: 12px;">
+                            Lexime: ${sensor.count} | Lloje: ${types.length}
+                        </div>
                         ${types.map(type => {
                             const stat = sensor.types[type];
+                            const color = typeColors[type] || '#667eea';
                             return `
-                                <div style="margin: 10px 0;">
-                                    <strong>${type}:</strong>
-                                    <div class="value">${parseFloat(stat.avg_value).toFixed(2)}</div>
-                                    <small>Min: ${parseFloat(stat.min_value).toFixed(2)} | Max: ${parseFloat(stat.max_value).toFixed(2)}</small>
+                                <div style="margin: 10px 0; padding: 10px; background: ${color}15; border-radius: 5px; border-left: 3px solid ${color};">
+                                    <strong style="color: ${color};">${type.toUpperCase()}:</strong>
+                                    <div class="value" style="color: ${color};">${parseFloat(stat.avg_value || 0).toFixed(2)}</div>
+                                    <small style="color: #666;">
+                                        Min: ${parseFloat(stat.min_value || 0).toFixed(2)} | 
+                                        Max: ${parseFloat(stat.max_value || 0).toFixed(2)} | 
+                                        StdDev: ${parseFloat(stat.stddev_value || 0).toFixed(2)}
+                                    </small>
                                 </div>
                             `;
                         }).join('')}
@@ -412,13 +501,31 @@
         
         // Auto-load në fillim
         window.addEventListener('load', () => {
-            loadSensorStats();
-            loadSensorsList();
-            // Refresh çdo 30 sekonda
-            setInterval(() => {
+            if (authToken) {
                 loadSensorStats();
                 loadSensorsList();
-            }, 30000);
+                
+                // Clear existing interval
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                }
+                
+                // Refresh çdo 30 sekonda
+                refreshInterval = setInterval(() => {
+                    checkAuth();
+                    loadSensorStats();
+                    loadSensorsList();
+                }, 30000);
+            } else {
+                window.location.href = '/';
+            }
+        });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
         });
     </script>
 </body>

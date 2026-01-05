@@ -177,28 +177,44 @@
         let authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
         let forecastChart = null;
         let trendsChart = null;
+        let refreshInterval = null;
         
+        // Kontrollo nëse ka token
         if (!authToken) {
             window.location.href = '/';
         }
         
+        function checkAuth() {
+            if (!authToken) {
+                window.location.href = '/';
+            }
+        }
+        
         async function loadForecast() {
+            checkAuth();
             const hours = document.getElementById('forecastHours').value;
             const useML = document.getElementById('useML').value;
             
             try {
                 const response = await fetch(`/api/load-forecast?hours_ahead=${hours}&use_ml=${useML}`, {
-                    headers: {'Authorization': `Bearer ${authToken}`}
+                    headers: {'Authorization': `Bearer ${authToken}`},
+                    credentials: 'include'
                 });
+                
+                if (response.status === 401) {
+                    window.location.href = '/';
+                    return;
+                }
+                
                 const data = await response.json();
                 
                 if (data.status === 'success') {
                     updateForecastChart(data.forecast, data.model);
                 } else {
-                    alert('Error: ' + (data.error || 'Failed to load forecast'));
+                    console.error('Error loading forecast:', data.error);
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                console.error('Error loading forecast:', error);
             }
         }
         
@@ -233,6 +249,7 @@
         }
         
         async function loadAnomalies() {
+            checkAuth();
             const sensorId = document.getElementById('anomalySensorId').value;
             const threshold = document.getElementById('anomalyThreshold').value;
             
@@ -243,17 +260,24 @@
                 }
                 
                 const response = await fetch(url, {
-                    headers: {'Authorization': `Bearer ${authToken}`}
+                    headers: {'Authorization': `Bearer ${authToken}`},
+                    credentials: 'include'
                 });
+                
+                if (response.status === 401) {
+                    window.location.href = '/';
+                    return;
+                }
+                
                 const data = await response.json();
                 
                 if (data.status === 'success') {
                     displayAnomalies(data.anomalies, data.statistics);
                 } else {
-                    alert('Error: ' + (data.error || 'Failed to load anomalies'));
+                    console.error('Error loading anomalies:', data.error);
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                console.error('Error loading anomalies:', error);
             }
         }
         
@@ -287,21 +311,29 @@
         }
         
         async function loadTrends() {
+            checkAuth();
             const days = document.getElementById('trendDays').value;
             
             try {
                 const response = await fetch(`/api/consumption-trends?days=${days}`, {
-                    headers: {'Authorization': `Bearer ${authToken}`}
+                    headers: {'Authorization': `Bearer ${authToken}`},
+                    credentials: 'include'
                 });
+                
+                if (response.status === 401) {
+                    window.location.href = '/';
+                    return;
+                }
+                
                 const data = await response.json();
                 
                 if (data.status === 'success') {
                     updateTrendsChart(data.trends);
                 } else {
-                    alert('Error: ' + (data.error || 'Failed to load trends'));
+                    console.error('Error loading trends:', data.error);
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                console.error('Error loading trends:', error);
             }
         }
         
@@ -337,9 +369,33 @@
         
         // Auto-load në fillim
         window.addEventListener('load', () => {
-            loadForecast();
-            loadAnomalies();
-            loadTrends();
+            if (authToken) {
+                loadForecast();
+                loadAnomalies();
+                loadTrends();
+                
+                // Clear existing interval
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                }
+                
+                // Refresh çdo 60 sekonda
+                refreshInterval = setInterval(() => {
+                    checkAuth();
+                    loadForecast();
+                    loadAnomalies();
+                    loadTrends();
+                }, 60000);
+            } else {
+                window.location.href = '/';
+            }
+        });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
         });
     </script>
 </body>
