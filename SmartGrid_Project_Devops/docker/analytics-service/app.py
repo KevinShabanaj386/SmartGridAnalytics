@@ -11,6 +11,7 @@ import os
 import json
 from typing import Dict, List, Any
 import statistics
+import pandas as pd
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +28,18 @@ try:
 except Exception as e:
     logger.warning(f"Could not initialize Redis: {e}")
     cache_result = lambda ttl=None: lambda f: f  # No-op decorator
+
+# Initialize MLflow
+try:
+    import mlflow
+    import mlflow.sklearn
+    MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://smartgrid-mlflow:5000')
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    logger.info(f"MLflow initialized: {MLFLOW_TRACKING_URI}")
+    MLFLOW_AVAILABLE = True
+except Exception as e:
+    logger.warning(f"Could not initialize MLflow: {e}")
+    MLFLOW_AVAILABLE = False
 
 # PostgreSQL konfigurim
 DB_CONFIG = {
@@ -110,15 +123,123 @@ def get_sensor_statistics():
 def predict_load_forecast():
     """
     Parashikon ngarkesën për orët e ardhshme bazuar në të dhënat historike
-    Query params: hours_ahead (default: 24)
+    Query params: hours_ahead (default: 24), use_ml (default: true)
     """
     try:
         hours_ahead = int(request.args.get('hours_ahead', 24))
+        use_ml = request.args.get('use_ml', 'true').lower() == 'true'
         
+        # Përdor ML model nëse është i disponueshëm
+        if use_ml and MLFLOW_AVAILABLE:
+            try:
+                # Load model nga MLflow
+                model_uri = "models:/LoadForecastingModel/Production"
+                model = mlflow.sklearn.load_model(model_uri)
+                
+                # Merr të dhënat e fundit për features
+                conn = get_db_connection()
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                
+                cursor.execute("""
+                    SELECT 
+                        DATE_TRUNC('hour', timestamp) as hour_bucket,
+                        sensor_id,
+                        sensor_type,
+                        AVG(value) as avg_value,
+                        MIN(value) as min_value,
+                        MAX(value) as max_value,
+                        COUNT(*) as count,
+                        EXTRACT(HOUR FROM timestamp) as hour_of_day,
+                        EXTRACT(DOW FROM timestamp) as day_of_week,
+                        EXTRACT(MONTH FROM timestamp) as month
+                    FROM sensor_data
+                    WHERE sensor_type = 'power'
+                    AND timestamp >= NOW() - INTERVAL '24 hours'
+                    GROUP BY 
+                        DATE_TRUNC('hour', timestamp),
+                        sensor_id,
+                        sensor_type,
+                        EXTRACT(HOUR FROM timestamp),
+                        EXTRACT(DOW FROM timestamp),
+                        EXTRACT(MONTH FROM timestamp)
+                    ORDER BY hour_bucket DESC
+                    LIMIT 24
+                """)
+                
+                data = cursor.fetchall()
+                cursor.close()
+                conn.close()
+                
+                if data:
+                    # Përgatit features për model
+                    import pandas as pd
+                    df = pd.DataFrame([dict(row) for row in data])
+                    
+                    # Krijo features si në training
+                    df['prev_hour_avg'] = df['avg_value'].shift(1)
+                    df['prev_hour_min'] = df['min_value'].shift(1)
+                    df['prev_hour_max'] = df['max_value'].shift(1)
+                    df['rolling_avg_3h'] = df['avg_value'].rolling(window=3, min_periods=1).mean()
+                    df['rolling_avg_24h'] = df['avg_value'].rolling(window=24, min_periods=1).mean()
+                    
+                    # Features për prediction
+                    feature_columns = ['hour_of_day', 'day_of_week', 'month', 
+                                     'min_value', 'max_value', 'count',
+                                     'prev_hour_avg', 'prev_hour_min', 'prev_hour_max',
+                                     'rolling_avg_3h', 'rolling_avg_24h']
+                    
+                    # Bëj prediction për orët e ardhshme
+                    forecasts = []
+                    current_hour = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+                    
+                    for i in range(hours_ahead):
+                        target_hour = current_hour + timedelta(hours=i)
+                        
+                        # Krijo features për këtë orë
+                        last_row = df.iloc[-1] if len(df) > 0 else None
+                        if last_row is None:
+                            break
+                            
+                        features = {
+                            'hour_of_day': target_hour.hour,
+                            'day_of_week': target_hour.weekday(),
+                            'month': target_hour.month,
+                            'min_value': float(last_row['min_value']) if pd.notna(last_row['min_value']) else 0,
+                            'max_value': float(last_row['max_value']) if pd.notna(last_row['max_value']) else 0,
+                            'count': int(last_row['count']) if pd.notna(last_row['count']) else 1,
+                            'prev_hour_avg': float(last_row['avg_value']) if pd.notna(last_row['avg_value']) else 0,
+                            'prev_hour_min': float(last_row['min_value']) if pd.notna(last_row['min_value']) else 0,
+                            'prev_hour_max': float(last_row['max_value']) if pd.notna(last_row['max_value']) else 0,
+                            'rolling_avg_3h': float(last_row['rolling_avg_3h']) if pd.notna(last_row['rolling_avg_3h']) else 0,
+                            'rolling_avg_24h': float(last_row['rolling_avg_24h']) if pd.notna(last_row['rolling_avg_24h']) else 0
+                        }
+                        
+                        X = pd.DataFrame([features])[feature_columns]
+                        predicted_value = model.predict(X)[0]
+                        
+                        forecasts.append({
+                            'timestamp': target_hour.isoformat(),
+                            'predicted_load': round(float(predicted_value), 2),
+                            'confidence': 0.85,  # Më i lartë për ML model
+                            'model': 'mlflow_random_forest'
+                        })
+                    
+                    if forecasts:
+                        return jsonify({
+                            'status': 'success',
+                            'forecast': forecasts,
+                            'model': 'mlflow_random_forest',
+                            'generated_at': datetime.utcnow().isoformat()
+                        }), 200
+                
+            except Exception as e:
+                logger.warning(f"ML model prediction failed, falling back to simple method: {str(e)}")
+                # Fallback në metodën e thjeshtë
+        
+        # Metoda e thjeshtë (fallback)
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Merr të dhënat historike për 7 ditët e fundit
         cursor.execute("""
             SELECT 
                 DATE_TRUNC('hour', timestamp) as hour_bucket,
@@ -141,8 +262,7 @@ def predict_load_forecast():
                 'message': 'Insufficient historical data'
             }), 200
         
-        # Algoritëm i thjeshtë për parashikim (mund të zëvendësohet me ML model)
-        # Përdor mesataren e orës së njëjtë për ditët e fundit
+        # Algoritëm i thjeshtë për parashikim
         forecasts = []
         current_hour = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
         
@@ -150,7 +270,6 @@ def predict_load_forecast():
             target_hour = current_hour + timedelta(hours=i)
             hour_of_day = target_hour.hour
             
-            # Gjej mesataren për orën e njëjtë në ditët e fundit
             similar_hours = [
                 row['avg_value'] for row in historical_data
                 if row['hour_bucket'].hour == hour_of_day
@@ -158,17 +277,16 @@ def predict_load_forecast():
             
             if similar_hours:
                 predicted_value = statistics.mean(similar_hours)
-                # Shto një trend të thjeshtë bazuar në orën e ditës
-                trend_factor = 1.0 + (0.1 * abs(hour_of_day - 12) / 12)  # Më i lartë në mesditë
+                trend_factor = 1.0 + (0.1 * abs(hour_of_day - 12) / 12)
                 predicted_value *= trend_factor
             else:
-                # Fallback në mesataren globale
                 predicted_value = statistics.mean([row['avg_value'] for row in historical_data])
             
             forecasts.append({
                 'timestamp': target_hour.isoformat(),
                 'predicted_load': round(predicted_value, 2),
-                'confidence': 0.75  # Confidence score
+                'confidence': 0.75,
+                'model': 'simple_time_series'
             })
         
         return jsonify({
