@@ -57,7 +57,10 @@ def create_tables():
     try:
         cursor = conn.cursor()
         
-        # Tabela për të dhënat e sensorëve
+        # Aktivizo PostGIS extension
+        cursor.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
+        
+        # Tabela për të dhënat e sensorëve me PostGIS
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS sensor_data (
                 id SERIAL PRIMARY KEY,
@@ -67,6 +70,7 @@ def create_tables():
                 value DECIMAL(10, 4) NOT NULL,
                 latitude DECIMAL(10, 7),
                 longitude DECIMAL(10, 7),
+                location GEOMETRY(POINT, 4326),
                 timestamp TIMESTAMP NOT NULL,
                 metadata JSONB,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -128,19 +132,27 @@ def process_sensor_data(event: Dict[str, Any], retry_count: int = 0):
     try:
         cursor = conn.cursor()
         
-        # Ruajtja e të dhënave
+        # Krijo PostGIS Point nëse ka koordinata
+        location_point = None
+        lat = event['location'].get('lat')
+        lon = event['location'].get('lon')
+        if lat is not None and lon is not None:
+            location_point = f"POINT({lon} {lat})"
+        
+        # Ruajtja e të dhënave me PostGIS
         cursor.execute("""
             INSERT INTO sensor_data 
-            (event_id, sensor_id, sensor_type, value, latitude, longitude, timestamp, metadata)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            (event_id, sensor_id, sensor_type, value, latitude, longitude, location, timestamp, metadata)
+            VALUES (%s, %s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s, %s)
             ON CONFLICT (event_id) DO NOTHING
         """, (
             event['event_id'],
             event['sensor_id'],
             event['sensor_type'],
             event['value'],
-            event['location'].get('lat'),
-            event['location'].get('lon'),
+            lat,
+            lon,
+            location_point,
             datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00')),
             json.dumps(event.get('metadata', {}))
         ))

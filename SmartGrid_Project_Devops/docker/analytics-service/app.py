@@ -41,6 +41,15 @@ except Exception as e:
     logger.warning(f"Could not initialize MLflow: {e}")
     MLFLOW_AVAILABLE = False
 
+# Initialize PostGIS utilities
+try:
+    from geospatial_utils import create_spatial_index, find_sensors_in_polygon, get_clustering_data, get_convex_hull
+    POSTGIS_AVAILABLE = True
+    logger.info("PostGIS utilities loaded")
+except Exception as e:
+    logger.warning(f"Could not load PostGIS utilities: {e}")
+    POSTGIS_AVAILABLE = False
+
 # PostgreSQL konfigurim
 DB_CONFIG = {
     'host': os.getenv('POSTGRES_HOST', 'smartgrid-postgres'),
@@ -52,7 +61,14 @@ DB_CONFIG = {
 
 def get_db_connection():
     """Krijon një lidhje me bazën e të dhënave"""
-    return psycopg2.connect(**DB_CONFIG)
+    conn = psycopg2.connect(**DB_CONFIG)
+    # Krijo spatial index nëse është e nevojshme
+    if POSTGIS_AVAILABLE:
+        try:
+            create_spatial_index(conn)
+        except:
+            pass  # Index mund të ekzistojë tashmë
+    return conn
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -383,6 +399,183 @@ def detect_anomalies():
         logger.error(f"Error detecting anomalies: {str(e)}")
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
+@app.route('/api/v1/analytics/geospatial/nearby-sensors', methods=['GET'])
+def get_nearby_sensors():
+    """
+    Gjen sensorët afër një lokacioni specifik (geospatial query)
+    Query params: lat, lon, radius_km (default: 10)
+    """
+    try:
+        lat = float(request.args.get('lat', 0))
+        lon = float(request.args.get('lon', 0))
+        radius_km = float(request.args.get('radius_km', 10))
+        
+        if lat == 0 and lon == 0:
+            return jsonify({'error': 'lat and lon parameters required'}), 400
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # PostGIS query për të gjetur sensorët brenda rrezes
+        cursor.execute("""
+            SELECT 
+                sensor_id,
+                sensor_type,
+                value,
+                latitude,
+                longitude,
+                ST_Distance(
+                    location::geography,
+                    ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography
+                ) / 1000 as distance_km,
+                timestamp
+            FROM sensor_data
+            WHERE location IS NOT NULL
+            AND ST_DWithin(
+                location::geography,
+                ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
+                %s * 1000
+            )
+            AND timestamp >= NOW() - INTERVAL '24 hours'
+            ORDER BY distance_km
+            LIMIT 100
+        """, (lon, lat, lon, lat, radius_km))
+        
+        results = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            'status': 'success',
+            'center': {'lat': lat, 'lon': lon},
+            'radius_km': radius_km,
+            'sensors_found': len(results),
+            'sensors': [dict(row) for row in results]
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting nearby sensors: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/geospatial/heatmap', methods=['GET'])
+def get_heatmap_data():
+    """
+    Kthen të dhëna për heatmap bazuar në lokacionet e sensorëve
+    Query params: hours (default: 24), grid_size (default: 0.1 degrees)
+    """
+    try:
+        hours = int(request.args.get('hours', 24))
+        grid_size = float(request.args.get('grid_size', 0.1))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # PostGIS query për heatmap me grid aggregation
+        cursor.execute("""
+            SELECT 
+                ST_X(ST_Centroid(ST_Collect(location))) as lon,
+                ST_Y(ST_Centroid(ST_Collect(location))) as lat,
+                COUNT(*) as sensor_count,
+                AVG(value) as avg_value,
+                MAX(value) as max_value,
+                MIN(value) as min_value
+            FROM sensor_data
+            WHERE location IS NOT NULL
+            AND timestamp >= NOW() - INTERVAL '%s hours'
+            GROUP BY 
+                ST_SnapToGrid(location, %s, %s)
+            ORDER BY sensor_count DESC
+        """, (hours, grid_size, grid_size))
+        
+        results = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        heatmap_points = []
+        for row in results:
+            heatmap_points.append({
+                'lat': float(row['lat']),
+                'lon': float(row['lon']),
+                'intensity': int(row['sensor_count']),
+                'avg_value': float(row['avg_value']),
+                'max_value': float(row['max_value']),
+                'min_value': float(row['min_value'])
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'period_hours': hours,
+            'grid_size': grid_size,
+            'points': heatmap_points
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting heatmap data: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/geospatial/route-analysis', methods=['GET'])
+def get_route_analysis():
+    """
+    Analizon të dhënat përgjatë një rruge (linestring)
+    Query params: points (JSON array me {lat, lon} pairs)
+    """
+    try:
+        points_json = request.args.get('points')
+        if not points_json:
+            return jsonify({'error': 'points parameter required (JSON array)'}), 400
+        
+        import json as json_lib
+        points = json_lib.loads(points_json)
+        
+        if len(points) < 2:
+            return jsonify({'error': 'At least 2 points required'}), 400
+        
+        # Krijo PostGIS LineString nga points
+        linestring_coords = ', '.join([f"{p['lon']} {p['lat']}" for p in points])
+        linestring = f"LINESTRING({linestring_coords})"
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Gjej sensorët afër rrugës
+        cursor.execute("""
+            SELECT 
+                sensor_id,
+                sensor_type,
+                value,
+                latitude,
+                longitude,
+                ST_Distance(
+                    location::geography,
+                    ST_SetSRID(ST_GeomFromText(%s), 4326)::geography
+                ) / 1000 as distance_from_route_km,
+                timestamp
+            FROM sensor_data
+            WHERE location IS NOT NULL
+            AND ST_DWithin(
+                location::geography,
+                ST_SetSRID(ST_GeomFromText(%s), 4326)::geography,
+                5000
+            )
+            AND timestamp >= NOW() - INTERVAL '24 hours'
+            ORDER BY distance_from_route_km
+        """, (linestring, linestring))
+        
+        results = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            'status': 'success',
+            'route_points': points,
+            'sensors_along_route': len(results),
+            'sensors': [dict(row) for row in results]
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting route analysis: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
 @app.route('/api/v1/analytics/consumption/trends', methods=['GET'])
 def get_consumption_trends():
     """
@@ -436,6 +629,54 @@ def get_consumption_trends():
         
     except Exception as e:
         logger.error(f"Error getting consumption trends: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/geospatial/clustering', methods=['GET'])
+def get_sensor_clustering():
+    """
+    Kthen të dhëna për clustering të sensorëve (K-Means)
+    Query params: k (default: 5) - numri i clusters
+    """
+    try:
+        k = int(request.args.get('k', 5))
+        
+        if not POSTGIS_AVAILABLE:
+            return jsonify({'error': 'PostGIS not available'}), 503
+        
+        conn = get_db_connection()
+        clustering_data = get_clustering_data(conn, k)
+        conn.close()
+        
+        return jsonify({
+            'status': 'success',
+            'clusters': k,
+            'sensors': clustering_data
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting clustering: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/geospatial/convex-hull', methods=['GET'])
+def get_convex_hull_endpoint():
+    """
+    Kthen convex hull të të gjitha sensorëve (kufiri minimal)
+    """
+    try:
+        if not POSTGIS_AVAILABLE:
+            return jsonify({'error': 'PostGIS not available'}), 503
+        
+        conn = get_db_connection()
+        hull_data = get_convex_hull(conn)
+        conn.close()
+        
+        return jsonify({
+            'status': 'success',
+            'convex_hull': hull_data
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting convex hull: {str(e)}")
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
 if __name__ == '__main__':
