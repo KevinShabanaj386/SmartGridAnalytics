@@ -1,0 +1,454 @@
+openapi: 3.0.3
+info:
+  title: Smart Grid Analytics API
+  description: |
+    API për Smart Grid Analytics - Sistem i avancuar i procesimit të të dhënave
+    për menaxhimin dhe analizën e rrjetit inteligjent të energjisë.
+    
+    Kjo API ofron:
+    - Data Ingestion për sensorët dhe matësit
+    - Analytics dhe parashikime
+    - Notifications dhe alerts
+    - User management dhe autentikim
+  version: 1.0.0
+  contact:
+    name: Smart Grid Analytics Team
+    email: support@smartgrid.local
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Development server
+  - url: https://api.smartgrid.local/api/v1
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: Autentikim dhe autorizim
+  - name: Data Ingestion
+    description: Marrje e të dhënave nga sensorët dhe matësit
+  - name: Analytics
+    description: Analiza të avancuara dhe parashikime
+  - name: Notifications
+    description: Njoftimet dhe alertat
+  - name: Users
+    description: Menaxhimi i përdoruesve
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Regjistron një përdorues të ri
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Përdoruesi u regjistrua me sukses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '409':
+          description: Përdoruesi ekziston tashmë
+        '400':
+          description: Të dhëna të pavlefshme
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Autentikon përdoruesin dhe kthen JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login i suksesshëm
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Kredencialet janë të pasakta
+
+  /ingest/sensor:
+    post:
+      tags:
+        - Data Ingestion
+      summary: Dërgon të dhëna nga sensorët
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SensorDataRequest'
+      responses:
+        '201':
+          description: Të dhënat u dërguan me sukses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestionResponse'
+        '401':
+          description: Jo i autorizuar
+        '400':
+          description: Të dhëna të pavlefshme
+
+  /ingest/meter:
+    post:
+      tags:
+        - Data Ingestion
+      summary: Dërgon lexim matësi
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeterReadingRequest'
+      responses:
+        '201':
+          description: Leximi u dërgua me sukses
+        '401':
+          description: Jo i autorizuar
+
+  /analytics/sensor/stats:
+    get:
+      tags:
+        - Analytics
+      summary: Kthen statistikat e sensorëve
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sensor_id
+          in: query
+          schema:
+            type: string
+          description: ID e sensorit specifik
+        - name: sensor_type
+          in: query
+          schema:
+            type: string
+            enum: [voltage, current, power, frequency]
+          description: Lloji i sensorit
+        - name: hours
+          in: query
+          schema:
+            type: integer
+            default: 24
+          description: Numri i orëve për të kthyer statistikat
+      responses:
+        '200':
+          description: Statistikat e sensorëve
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorStatsResponse'
+
+  /analytics/predictive/load-forecast:
+    get:
+      tags:
+        - Analytics
+      summary: Parashikon ngarkesën për orët e ardhshme
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: hours_ahead
+          in: query
+          schema:
+            type: integer
+            default: 24
+          description: Numri i orëve për parashikim
+      responses:
+        '200':
+          description: Parashikimi i ngarkesës
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoadForecastResponse'
+
+  /analytics/anomalies:
+    get:
+      tags:
+        - Analytics
+      summary: Zbulon anomalitë në të dhënat e sensorëve
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sensor_id
+          in: query
+          schema:
+            type: string
+        - name: threshold
+          in: query
+          schema:
+            type: number
+            default: 3.0
+          description: Threshold për z-score
+      responses:
+        '200':
+          description: Lista e anomalive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnomaliesResponse'
+
+  /notifications/send:
+    post:
+      tags:
+        - Notifications
+      summary: Dërgon një njoftim
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationRequest'
+      responses:
+        '201':
+          description: Njoftimi u dërgua me sukses
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+      properties:
+        username:
+          type: string
+          example: "user123"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        password:
+          type: string
+          format: password
+          example: "password123"
+        role:
+          type: string
+          enum: [user, admin]
+          default: user
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+
+    LoginResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "success"
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        token_type:
+          type: string
+          example: "Bearer"
+        expires_in:
+          type: integer
+          example: 86400
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+
+    UserResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+
+    SensorDataRequest:
+      type: object
+      required:
+        - sensor_id
+        - sensor_type
+        - value
+        - location
+      properties:
+        sensor_id:
+          type: string
+          example: "sensor_001"
+        sensor_type:
+          type: string
+          enum: [voltage, current, power, frequency]
+          example: "voltage"
+        value:
+          type: number
+          example: 220.5
+        location:
+          type: object
+          properties:
+            lat:
+              type: number
+              example: 41.3275
+            lon:
+              type: number
+              example: 19.8187
+        metadata:
+          type: object
+
+    MeterReadingRequest:
+      type: object
+      required:
+        - meter_id
+        - customer_id
+        - reading
+      properties:
+        meter_id:
+          type: string
+        customer_id:
+          type: string
+        reading:
+          type: number
+        unit:
+          type: string
+          default: "kWh"
+
+    IngestionResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        event_id:
+          type: string
+        kafka_topic:
+          type: string
+        partition:
+          type: integer
+        offset:
+          type: integer
+
+    SensorStatsResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              sensor_id:
+                type: string
+              sensor_type:
+                type: string
+              avg_value:
+                type: number
+              min_value:
+                type: number
+              max_value:
+                type: number
+              stddev_value:
+                type: number
+              count:
+                type: integer
+        period_hours:
+          type: integer
+
+    LoadForecastResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        forecast:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              predicted_load:
+                type: number
+              confidence:
+                type: number
+        model:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
+
+    AnomaliesResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        anomalies:
+          type: array
+          items:
+            type: object
+        total_checked:
+          type: integer
+        anomalies_found:
+          type: integer
+        statistics:
+          type: object
+
+    NotificationRequest:
+      type: object
+      required:
+        - recipient
+        - type
+        - message
+      properties:
+        recipient:
+          type: string
+        type:
+          type: string
+          enum: [email, sms, webhook, push]
+        subject:
+          type: string
+        message:
+          type: string
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+          default: medium
+
