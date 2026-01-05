@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-ingestion-service
+  namespace: smartgrid
+  labels:
+    app: data-ingestion-service
+    version: v1
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: data-ingestion-service
+  template:
+    metadata:
+      labels:
+        app: data-ingestion-service
+        version: v1
+    spec:
+      containers:
+      - name: data-ingestion
+        image: smartgrid/data-ingestion-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5001
+          name: http
+        env:
+        - name: KAFKA_BROKER
+          valueFrom:
+            configMapKeyRef:
+              name: smartgrid-config
+              key: KAFKA_BROKER
+        - name: KAFKA_TOPIC_SENSOR_DATA
+          valueFrom:
+            configMapKeyRef:
+              name: smartgrid-config
+              key: KAFKA_TOPIC_SENSOR_DATA
+        - name: KAFKA_TOPIC_METER_READINGS
+          valueFrom:
+            configMapKeyRef:
+              name: smartgrid-config
+              key: KAFKA_TOPIC_METER_READINGS
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5001
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-ingestion-service
+  namespace: smartgrid
+  labels:
+    app: data-ingestion-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5001
+    targetPort: 5001
+    protocol: TCP
+    name: http
+  selector:
+    app: data-ingestion-service
+

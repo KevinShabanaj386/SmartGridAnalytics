@@ -77,15 +77,111 @@ services:
     depends_on:
       - prometheus
 
+  # Redis për caching
+  redis:
+    image: redis:7-alpine
+    container_name: smartgrid-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  # Mikrosherbimet
+  data-ingestion-service:
+    build: ./data-ingestion-service
+    container_name: smartgrid-data-ingestion
+    ports:
+      - "5001:5001"
+    environment:
+      - KAFKA_BROKER=smartgrid-kafka:9092
+      - KAFKA_TOPIC_SENSOR_DATA=smartgrid-sensor-data
+      - KAFKA_TOPIC_METER_READINGS=smartgrid-meter-readings
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
+  data-processing-service:
+    build: ./data-processing-service
+    container_name: smartgrid-data-processing
+    environment:
+      - KAFKA_BROKER=smartgrid-kafka:9092
+      - KAFKA_TOPIC_SENSOR_DATA=smartgrid-sensor-data
+      - KAFKA_TOPIC_METER_READINGS=smartgrid-meter-readings
+      - KAFKA_GROUP_ID=data-processing-service-group
+      - POSTGRES_HOST=smartgrid-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=smartgrid_db
+      - POSTGRES_USER=smartgrid
+      - POSTGRES_PASSWORD=smartgrid123
+    depends_on:
+      - postgres
+      - kafka
+    restart: unless-stopped
+
+  analytics-service:
+    build: ./analytics-service
+    container_name: smartgrid-analytics
+    ports:
+      - "5002:5002"
+    environment:
+      - POSTGRES_HOST=smartgrid-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=smartgrid_db
+      - POSTGRES_USER=smartgrid
+      - POSTGRES_PASSWORD=smartgrid123
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  notification-service:
+    build: ./notification-service
+    container_name: smartgrid-notification
+    ports:
+      - "5003:5003"
+    environment:
+      - KAFKA_BROKER=smartgrid-kafka:9092
+      - KAFKA_TOPIC_ALERTS=smartgrid-alerts
+      - KAFKA_TOPIC_NOTIFICATIONS=smartgrid-notifications
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
+  user-management-service:
+    build: ./user-management-service
+    container_name: smartgrid-user-management
+    ports:
+      - "5004:5004"
+    environment:
+      - POSTGRES_HOST=smartgrid-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=smartgrid_db
+      - POSTGRES_USER=smartgrid
+      - POSTGRES_PASSWORD=smartgrid123
+      - JWT_SECRET=your-secret-key-change-in-production
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
   api-gateway:
     build: ./api_gateway
     container_name: smartgrid-api-gateway
     ports:
       - "5000:5000"
+    environment:
+      - DATA_INGESTION_SERVICE=http://smartgrid-data-ingestion:5001
+      - DATA_PROCESSING_SERVICE=http://smartgrid-data-processing:5001
+      - ANALYTICS_SERVICE=http://smartgrid-analytics:5002
+      - NOTIFICATION_SERVICE=http://smartgrid-notification:5003
+      - USER_MANAGEMENT_SERVICE=http://smartgrid-user-management:5004
     depends_on:
-      - postgres
-      - kafka
+      - data-ingestion-service
+      - analytics-service
+      - notification-service
+      - user-management-service
+    restart: unless-stopped
 
 volumes:
   pgdata:
   grafana_data:
+  redis_data:
