@@ -122,7 +122,7 @@ def create_tables():
     finally:
         db_pool.putconn(conn)
 
-def process_sensor_data(event: Dict[str, Any]):
+def process_sensor_data(event: Dict[str, Any], retry_count: int = 0):
     """Përpunon të dhënat e sensorit dhe i ruan në bazën e të dhënave"""
     conn = db_pool.getconn()
     try:
@@ -151,7 +151,22 @@ def process_sensor_data(event: Dict[str, Any]):
     except Exception as e:
         conn.rollback()
         logger.error(f"Error processing sensor data: {str(e)}")
-        raise
+        
+        # Nëse ka dështuar dhe ka kaluar max retries, dërgo në DLQ
+        MAX_RETRIES = int(os.getenv('MAX_RETRIES', '3'))
+        if retry_count >= MAX_RETRIES:
+            try:
+                from dlq_handler import send_to_dlq
+                send_to_dlq(
+                    original_topic=KAFKA_TOPIC_SENSOR_DATA,
+                    message=event,
+                    error=str(e),
+                    retry_count=retry_count
+                )
+            except Exception as dlq_error:
+                logger.critical(f"Failed to send to DLQ: {str(dlq_error)}")
+        else:
+            raise  # Re-raise për retry
     finally:
         db_pool.putconn(conn)
 
@@ -249,7 +264,17 @@ def consume_sensor_data():
                 if len(batch) >= batch_size:
                     # Përpunim batch
                     for event in batch:
-                        process_sensor_data(event)
+                        retry_count = 0
+                        while retry_count < 3:  # Max 3 retries
+                            try:
+                                process_sensor_data(event, retry_count)
+                                break
+                            except Exception as e:
+                                retry_count += 1
+                                if retry_count >= 3:
+                                    logger.error(f"Max retries reached for event {event.get('event_id')}")
+                                else:
+                                    logger.warning(f"Retry {retry_count} for event {event.get('event_id')}")
                     batch = []
                     logger.info(f"Processed batch of {batch_size} sensor events")
                     

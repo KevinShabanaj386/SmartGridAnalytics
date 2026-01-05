@@ -1,0 +1,69 @@
+{
+  "dashboard": {
+    "title": "Smart Grid Analytics - ML Models",
+    "tags": ["smartgrid", "ml", "mlflow"],
+    "timezone": "browser",
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "1m",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Model Predictions",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "mlflow_model_predictions_total",
+            "legendFormat": "{{model_name}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Model Accuracy",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "mlflow_model_accuracy",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Prediction Latency",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 16, "x": 8, "y": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(mlflow_model_prediction_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{model_name}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Load Forecast vs Actual",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "smartgrid_load_forecast",
+            "legendFormat": "Forecast",
+            "refId": "A"
+          },
+          {
+            "expr": "smartgrid_load_actual",
+            "legendFormat": "Actual",
+            "refId": "B"
+          }
+        ]
+      }
+    ]
+  }
+}
+
