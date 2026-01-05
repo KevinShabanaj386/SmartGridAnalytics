@@ -124,7 +124,7 @@ def get_load_forecast():
 
 @app.route('/api/anomalies', methods=['GET'])
 def get_anomalies():
-    """Merr anomalitë"""
+    """Merr anomalitë (Z-Score method)"""
     try:
         headers = {}
         token = user_token or session.get('token')
@@ -132,9 +132,15 @@ def get_anomalies():
             headers['Authorization'] = f'Bearer {token}'
         
         sensor_id = request.args.get('sensor_id')
+        threshold = request.args.get('threshold', '3.0')
+        
+        params = {'threshold': threshold}
+        if sensor_id:
+            params['sensor_id'] = sensor_id
+        
         response = requests.get(
             f"{API_GATEWAY_URL}/api/v1/analytics/anomalies",
-            params={'sensor_id': sensor_id} if sensor_id else {},
+            params=params,
             headers=headers
         )
         
@@ -170,6 +176,37 @@ def ingest_sensor():
             
     except Exception as e:
         logger.error(f"Error ingesting sensor data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/anomalies/ml', methods=['GET'])
+def get_anomalies_ml():
+    """Merr anomalitë duke përdorur Random Forest ML model"""
+    try:
+        headers = {}
+        token = user_token or session.get('token')
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+        
+        sensor_id = request.args.get('sensor_id')
+        hours = request.args.get('hours', 24)
+        
+        params = {'hours': hours, 'use_ml': 'true'}
+        if sensor_id:
+            params['sensor_id'] = sensor_id
+        
+        response = requests.get(
+            f"{API_GATEWAY_URL}/api/v1/analytics/anomalies/ml",
+            params=params,
+            headers=headers
+        )
+        
+        if response.status_code == 200:
+            return jsonify(response.json())
+        else:
+            return jsonify({'error': 'Failed to fetch ML anomalies'}), response.status_code
+            
+    except Exception as e:
+        logger.error(f"Error fetching ML anomalies: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/consumption-trends', methods=['GET'])

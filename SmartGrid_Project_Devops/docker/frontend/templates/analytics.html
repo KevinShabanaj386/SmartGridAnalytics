@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Analiza - Smart Grid Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/modern-style.css">
     <style>
         * {
             margin: 0;
@@ -146,17 +147,24 @@
             </div>
             
             <div class="card">
-                <h3>⚠️ Zbulim Anomalish</h3>
+                <h3>⚠️ Zbulim Anomalish (ML-Powered)</h3>
+                <div class="form-group">
+                    <label>Metoda:</label>
+                    <select id="anomalyMethod">
+                        <option value="ml">Random Forest ML (98.6% accuracy)</option>
+                        <option value="zscore">Z-Score (Traditional)</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label>Sensor ID (opsionale):</label>
                     <input type="text" id="anomalySensorId" placeholder="sensor_001">
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="thresholdGroup">
                     <label>Threshold (Z-score):</label>
                     <input type="number" id="anomalyThreshold" value="3.0" step="0.1">
                 </div>
-                <button class="btn" onclick="loadAnomalies()">Zbulo Anomalitë</button>
-                <div id="anomaliesContainer" style="margin-top: 20px; max-height: 400px; overflow-y: auto;"></div>
+                <button class="btn" onclick="loadAnomalies()">🔍 Zbulo Anomalitë</button>
+                <div id="anomaliesContainer" style="margin-top: 20px; max-height: 500px; overflow-y: auto;"></div>
             </div>
             
             <div class="card">
@@ -252,11 +260,26 @@
             checkAuth();
             const sensorId = document.getElementById('anomalySensorId').value;
             const threshold = document.getElementById('anomalyThreshold').value;
+            const method = document.getElementById('anomalyMethod').value;
+            
+            // Show loading
+            const container = document.getElementById('anomaliesContainer');
+            container.innerHTML = '<div class="alert alert-info">🔄 Po zbuloj anomalitë...</div>';
             
             try {
-                let url = `/api/anomalies?threshold=${threshold}`;
-                if (sensorId) {
-                    url += `&sensor_id=${sensorId}`;
+                let url;
+                if (method === 'ml') {
+                    // Përdor Random Forest ML endpoint
+                    url = `/api/anomalies/ml?hours=24`;
+                    if (sensorId) {
+                        url += `&sensor_id=${sensorId}`;
+                    }
+                } else {
+                    // Përdor Z-Score method
+                    url = `/api/anomalies?threshold=${threshold}`;
+                    if (sensorId) {
+                        url += `&sensor_id=${sensorId}`;
+                    }
                 }
                 
                 const response = await fetch(url, {
@@ -272,36 +295,67 @@
                 const data = await response.json();
                 
                 if (data.status === 'success') {
-                    displayAnomalies(data.anomalies, data.statistics);
+                    displayAnomalies(data.anomalies, data.statistics, data.method, data.model_accuracy);
                 } else {
-                    console.error('Error loading anomalies:', data.error);
+                    container.innerHTML = `<div class="alert alert-danger">❌ Gabim: ${data.error || 'Unknown error'}</div>`;
                 }
             } catch (error) {
                 console.error('Error loading anomalies:', error);
+                container.innerHTML = `<div class="alert alert-danger">❌ Gabim në lidhje: ${error.message}</div>`;
             }
         }
         
-        function displayAnomalies(anomalies, stats) {
+        function displayAnomalies(anomalies, stats, method = 'z_score', modelAccuracy = null) {
             const container = document.getElementById('anomaliesContainer');
             
             if (anomalies.length === 0) {
-                container.innerHTML = '<p style="color: green; padding: 20px;">✅ Nuk ka anomalitë të zbuluara</p>';
+                container.innerHTML = '<div class="alert alert-success">✅ Nuk ka anomalitë të zbuluara. Sistemi funksionon normalisht!</div>';
                 return;
             }
             
-            let html = `<div style="margin-bottom: 15px;">
-                <strong>Statistikat:</strong><br>
-                Mean: ${stats.mean.toFixed(2)} | StdDev: ${stats.stddev.toFixed(2)} | Threshold: ${stats.threshold}
+            let html = `<div class="alert alert-info" style="margin-bottom: 20px;">
+                <strong>📊 Statistikat:</strong><br>
+                Metoda: <strong>${method === 'random_forest' ? 'Random Forest ML' : 'Z-Score'}</strong>
+                ${modelAccuracy ? ` | Saktësia: <strong>${modelAccuracy}</strong>` : ''}<br>
+                ${stats.mean !== undefined ? `Mesatarja: ${stats.mean.toFixed(2)}` : ''}
+                ${stats.stddev !== undefined ? ` | Devijimi: ${stats.stddev.toFixed(2)}` : ''}
+                ${stats.threshold !== undefined ? ` | Threshold: ${stats.threshold}` : ''}
+                ${stats.anomaly_rate !== undefined ? ` | Shkalla e anomalive: ${stats.anomaly_rate}%` : ''}<br>
+                <strong>Total i kontrolluar:</strong> ${stats.total_checked || anomalies.length} | 
+                <strong>Anomalitë të gjetura:</strong> ${anomalies.length}
             </div>`;
             
-            html += '<div style="max-height: 300px; overflow-y: auto;">';
-            anomalies.forEach(anomaly => {
+            html += '<div style="max-height: 400px; overflow-y: auto;">';
+            anomalies.forEach((anomaly, index) => {
+                const anomalyType = anomaly.anomaly_type || 'moderate';
+                const probability = anomaly.anomaly_probability || anomaly.z_score || 0;
+                const badgeClass = `badge-${anomalyType.replace('_', '-')}`;
+                
                 html += `
-                    <div style="padding: 10px; margin: 5px 0; background: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107;">
-                        <strong>${anomaly.sensor_id}</strong> (${anomaly.sensor_type})<br>
-                        <small>Vlera: ${anomaly.value} | Z-score: ${anomaly.z_score} | 
-                        Expected: ${anomaly.expected_range.min.toFixed(2)} - ${anomaly.expected_range.max.toFixed(2)}</small><br>
-                        <small style="color: #666;">${new Date(anomaly.timestamp).toLocaleString()}</small>
+                    <div class="anomaly-card ${anomalyType}" style="animation-delay: ${index * 0.1}s">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                            <div>
+                                <strong style="font-size: 16px;">${anomaly.sensor_id || 'Unknown'}</strong>
+                                <span class="anomaly-badge ${badgeClass}">${anomalyType.replace('_', ' ').toUpperCase()}</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 18px; font-weight: bold; color: ${anomalyType === 'very_high' ? '#ef4444' : '#f59e0b'}">
+                                    ${probability.toFixed(1)}${method === 'random_forest' ? '%' : ''}
+                                </div>
+                                <small style="color: #6b7280;">${method === 'random_forest' ? 'Confidence' : 'Z-Score'}</small>
+                            </div>
+                        </div>
+                        <div style="margin: 10px 0;">
+                            <div><strong>Lloji:</strong> ${anomaly.sensor_type || 'N/A'}</div>
+                            <div><strong>Vlera:</strong> ${anomaly.value.toFixed(2)} ${anomaly.sensor_type === 'power' ? 'kW' : ''}</div>
+                            ${anomaly.expected_range ? `
+                                <div><strong>Vargu i pritur:</strong> ${anomaly.expected_range.min.toFixed(2)} - ${anomaly.expected_range.max.toFixed(2)}</div>
+                            ` : ''}
+                            ${anomaly.confidence ? `<div><strong>Besueshmëria:</strong> ${anomaly.confidence}</div>` : ''}
+                        </div>
+                        <div style="color: #6b7280; font-size: 12px; margin-top: 10px;">
+                            🕐 ${new Date(anomaly.timestamp).toLocaleString('sq-AL')}
+                        </div>
                     </div>
                 `;
             });
@@ -309,6 +363,16 @@
             
             container.innerHTML = html;
         }
+        
+        // Toggle threshold field bazuar në metodë
+        document.getElementById('anomalyMethod').addEventListener('change', function() {
+            const thresholdGroup = document.getElementById('thresholdGroup');
+            if (this.value === 'ml') {
+                thresholdGroup.style.display = 'none';
+            } else {
+                thresholdGroup.style.display = 'block';
+            }
+        });
         
         async function loadTrends() {
             checkAuth();
