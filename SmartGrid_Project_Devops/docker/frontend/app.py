@@ -2,7 +2,7 @@
 Frontend Web Application për Smart Grid Analytics
 Dashboard interaktive për vizualizim dhe menaxhim
 """
-from flask import Flask, render_template, jsonify, request, send_from_directory
+from flask import Flask, render_template, jsonify, request, send_from_directory, session
 import requests
 import os
 import logging

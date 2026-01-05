@@ -117,6 +117,57 @@ def create_tables():
             )
         """)
         
+        # Tabela për agregatat në kohë reale nga Spark (bazuar në Real-Time Energy Monitoring System)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sensor_aggregates_realtime (
+                id SERIAL PRIMARY KEY,
+                window_start TIMESTAMP NOT NULL,
+                window_end TIMESTAMP NOT NULL,
+                sensor_type VARCHAR(50) NOT NULL,
+                sensor_id VARCHAR(100) NOT NULL,
+                avg_value DECIMAL(10, 4),
+                min_value DECIMAL(10, 4),
+                max_value DECIMAL(10, 4),
+                count BIGINT,
+                stddev_value DECIMAL(10, 4),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Tabela për agregatat e konsumit në kohë reale
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS consumption_aggregates_realtime (
+                id SERIAL PRIMARY KEY,
+                window_start TIMESTAMP NOT NULL,
+                window_end TIMESTAMP NOT NULL,
+                customer_id VARCHAR(100) NOT NULL,
+                total_consumption DECIMAL(12, 4),
+                avg_consumption DECIMAL(12, 4),
+                reading_count BIGINT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Tabela për agregatat e motit (bazuar në Real-Time Energy Monitoring System)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS weather_aggregates_realtime (
+                id SERIAL PRIMARY KEY,
+                window_start TIMESTAMP NOT NULL,
+                window_end TIMESTAMP NOT NULL,
+                avg_temperature DECIMAL(5, 2),
+                avg_humidity DECIMAL(5, 2),
+                avg_pressure DECIMAL(7, 2),
+                avg_wind_speed DECIMAL(5, 2),
+                weather_condition VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Indekset për tabelat e reja
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_realtime_sensor_window ON sensor_aggregates_realtime(window_start, window_end)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_realtime_consumption_window ON consumption_aggregates_realtime(window_start, window_end)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_realtime_weather_window ON weather_aggregates_realtime(window_start, window_end)")
+        
         conn.commit()
         logger.info("Database tables created/verified")
     except Exception as e:

@@ -1,0 +1,64 @@
+name: Code Quality Analysis
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  sonarqube:
+    name: SonarQube Analysis
+    runs-on: ubuntu-latest
+    
+    services:
+      sonarqube:
+        image: sonarqube:community
+        ports:
+          - 9000:9000
+        env:
+          SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: true
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install sonarqube-community-plugin
+          pip install -r SmartGrid_Project_Devops/docker/analytics-service/requirements.txt
+          pip install -r SmartGrid_Project_Devops/docker/data-processing-service/requirements.txt
+      
+      - name: Run SonarQube Scanner
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: http://localhost:9000
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=smartgrid-analytics \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=http://localhost:9000 \
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+
+  code-review:
+    name: Code Review Checklist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check code quality
+        run: |
+          echo "Code Review Checklist:"
+          echo "- [ ] Code follows PEP 8 style guide"
+          echo "- [ ] Functions have docstrings"
+          echo "- [ ] Error handling is implemented"
+          echo "- [ ] No hardcoded secrets"
+          echo "- [ ] Proper logging is used"
+          echo "- [ ] Database queries use parameterized statements"
+

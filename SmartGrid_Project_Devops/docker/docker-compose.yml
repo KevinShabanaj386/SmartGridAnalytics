@@ -315,9 +315,99 @@ services:
       - api-gateway
     restart: unless-stopped
 
+  # Weather Data Producer Service (bazuar në Real-Time Energy Monitoring System)
+  weather-producer:
+    build: ./weather-producer-service
+    container_name: smartgrid-weather-producer
+    ports:
+      - "5006:5006"
+    environment:
+      - KAFKA_BROKER=smartgrid-kafka:9092
+      - KAFKA_TOPIC_WEATHER=smartgrid-weather-data
+      - WEATHER_UPDATE_INTERVAL=60
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
+  # Apache Spark Structured Streaming Service (bazuar në Real-Time Energy Monitoring System)
+  spark-streaming:
+    build: ./spark-streaming-service
+    container_name: smartgrid-spark-streaming
+    environment:
+      - KAFKA_BROKER=smartgrid-kafka:9092
+      - KAFKA_TOPIC_SENSOR_DATA=smartgrid-sensor-data
+      - KAFKA_TOPIC_METER_READINGS=smartgrid-meter-readings
+      - KAFKA_TOPIC_WEATHER=smartgrid-weather-data
+      - POSTGRES_HOST=smartgrid-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=smartgrid_db
+      - POSTGRES_USER=smartgrid
+      - POSTGRES_PASSWORD=smartgrid123
+    depends_on:
+      - kafka
+      - postgres
+    volumes:
+      - spark-checkpoint:/tmp/spark-checkpoint
+    restart: unless-stopped
+
+  # HashiCorp Vault për Secrets Management (kërkesë e profesorit)
+  vault:
+    image: hashicorp/vault:1.15
+    container_name: smartgrid-vault
+    ports:
+      - "8200:8200"
+    environment:
+      - VAULT_ADDR=http://0.0.0.0:8200
+      - VAULT_DEV_ROOT_TOKEN_ID=dev-root-token
+      - VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - vault_data:/vault/data
+      - ./vault/config.hcl:/vault/config/config.hcl
+    command: vault server -config=/vault/config/config.hcl
+    restart: unless-stopped
+
+  # Consul për Service Discovery dhe Config Management (kërkesë e profesorit)
+  consul:
+    image: consul:1.17
+    container_name: smartgrid-consul
+    ports:
+      - "8500:8500"
+      - "8600:8600/udp"
+    environment:
+      - CONSUL_BIND_INTERFACE=eth0
+    volumes:
+      - consul_data:/consul/data
+      - ./consul/config.json:/consul/config/config.json
+    command: consul agent -server -bootstrap-expect=1 -ui -config-dir=/consul/config
+    restart: unless-stopped
+
+  # SonarQube për Static Code Analysis (kërkesë e profesorit)
+  sonarqube:
+    image: sonarqube:community
+    container_name: smartgrid-sonarqube
+    ports:
+      - "9000:9000"
+    environment:
+      - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
 volumes:
   pgdata:
   grafana_data:
   redis_data:
   elasticsearch_data:
   minio_data:
+  spark-checkpoint:
+  vault_data:
+  consul_data:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:
