@@ -54,6 +54,7 @@ def login():
         if response.status_code == 200:
             result = response.json()
             user_token = result.get('token')
+            session['token'] = user_token  # Ruaj në session
             return jsonify({
                 'success': True,
                 'token': user_token,
@@ -74,8 +75,9 @@ def get_sensor_stats():
     """Merr statistikat e sensorëve"""
     try:
         headers = {}
-        if user_token:
-            headers['Authorization'] = f'Bearer {user_token}'
+        token = user_token or session.get('token')
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
         
         hours = request.args.get('hours', 24)
         response = requests.get(
@@ -98,8 +100,9 @@ def get_load_forecast():
     """Merr parashikimin e ngarkesës"""
     try:
         headers = {}
-        if user_token:
-            headers['Authorization'] = f'Bearer {user_token}'
+        token = user_token or session.get('token')
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
         
         hours_ahead = request.args.get('hours_ahead', 24)
         use_ml = request.args.get('use_ml', 'true')
@@ -124,8 +127,9 @@ def get_anomalies():
     """Merr anomalitë"""
     try:
         headers = {}
-        if user_token:
-            headers['Authorization'] = f'Bearer {user_token}'
+        token = user_token or session.get('token')
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
         
         sensor_id = request.args.get('sensor_id')
         response = requests.get(
@@ -148,8 +152,9 @@ def ingest_sensor():
     """Dërgon të dhëna sensor"""
     try:
         headers = {'Content-Type': 'application/json'}
-        if user_token:
-            headers['Authorization'] = f'Bearer {user_token}'
+        token = user_token or session.get('token')
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
         
         data = request.get_json()
         response = requests.post(
@@ -165,6 +170,37 @@ def ingest_sensor():
             
     except Exception as e:
         logger.error(f"Error ingesting sensor data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/consumption-trends', methods=['GET'])
+def get_consumption_trends():
+    """Merr trendet e konsumit"""
+    try:
+        headers = {}
+        token = user_token or session.get('token')
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+        
+        days = request.args.get('days', 30)
+        customer_id = request.args.get('customer_id')
+        
+        params = {'days': days}
+        if customer_id:
+            params['customer_id'] = customer_id
+        
+        response = requests.get(
+            f"{API_GATEWAY_URL}/api/v1/analytics/consumption/trends",
+            params=params,
+            headers=headers
+        )
+        
+        if response.status_code == 200:
+            return jsonify(response.json())
+        else:
+            return jsonify({'error': 'Failed to fetch trends'}), response.status_code
+            
+    except Exception as e:
+        logger.error(f"Error fetching consumption trends: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/health', methods=['GET'])

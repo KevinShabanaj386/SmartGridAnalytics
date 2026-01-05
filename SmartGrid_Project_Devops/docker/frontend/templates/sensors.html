@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensorët - Smart Grid Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .nav {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .nav a {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        
+        .nav a:hover {
+            background: #5568d3;
+        }
+        
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .card h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        .btn:hover {
+            background: #5568d3;
+        }
+        
+        .sensor-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .sensor-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .sensor-card h4 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .sensor-card .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 20px;
+        }
+        
+        .ingest-form {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📡 Menaxhimi i Sensorëve</h1>
+            <div class="nav">
+                <a href="/">Dashboard</a>
+                <a href="/dashboard">Statistikat</a>
+                <a href="/analytics">Analiza</a>
+                <a href="/sensors">Sensorët</a>
+            </div>
+        </div>
+        
+        <div class="ingest-form">
+            <h3>➕ Dërgo të Dhëna Sensor</h3>
+            <form id="ingestForm" onsubmit="ingestSensor(event)">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div class="form-group">
+                        <label>Sensor ID:</label>
+                        <input type="text" id="sensorId" value="sensor_001" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Lloji i Sensorit:</label>
+                        <select id="sensorType" required>
+                            <option value="voltage">Voltage</option>
+                            <option value="current">Current</option>
+                            <option value="power">Power</option>
+                            <option value="frequency">Frequency</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Vlera:</label>
+                        <input type="number" id="sensorValue" step="0.01" value="220.5" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Latitude:</label>
+                        <input type="number" id="latitude" step="0.0001" value="41.3275" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Longitude:</label>
+                        <input type="number" id="longitude" step="0.0001" value="19.8187" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn" style="margin-top: 15px;">Dërgo të Dhëna</button>
+            </form>
+            <div id="ingestResult" style="margin-top: 15px;"></div>
+        </div>
+        
+        <div class="card">
+            <h3>📊 Statistikat e Sensorëve</h3>
+            <div class="form-group">
+                <label>Orët:</label>
+                <input type="number" id="statsHours" value="24" min="1" max="168">
+            </div>
+            <div class="form-group">
+                <label>Lloji i Sensorit (opsionale):</label>
+                <select id="statsSensorType">
+                    <option value="">Të gjitha</option>
+                    <option value="voltage">Voltage</option>
+                    <option value="current">Current</option>
+                    <option value="power">Power</option>
+                    <option value="frequency">Frequency</option>
+                </select>
+            </div>
+            <button class="btn" onclick="loadSensorStats()">Shiko Statistikat</button>
+            <div class="chart-container">
+                <canvas id="sensorStatsChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>📍 Sensorët Aktivë</h3>
+            <div id="sensorsList" class="sensor-list">
+                <!-- Sensorët do të shfaqen këtu -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+        let sensorStatsChart = null;
+        
+        if (!authToken) {
+            window.location.href = '/';
+        }
+        
+        async function ingestSensor(event) {
+            event.preventDefault();
+            
+            const data = {
+                sensor_id: document.getElementById('sensorId').value,
+                sensor_type: document.getElementById('sensorType').value,
+                value: parseFloat(document.getElementById('sensorValue').value),
+                location: {
+                    lat: parseFloat(document.getElementById('latitude').value),
+                    lon: parseFloat(document.getElementById('longitude').value)
+                }
+            };
+            
+            try {
+                const response = await fetch('/api/ingest-sensor', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                const resultDiv = document.getElementById('ingestResult');
+                
+                if (response.status === 201) {
+                    resultDiv.innerHTML = `<div style="padding: 10px; background: #d4edda; color: #155724; border-radius: 5px;">
+                        ✅ Të dhënat u dërguan me sukses! Event ID: ${result.event_id}
+                    </div>`;
+                    // Reload stats pas dërgimit
+                    setTimeout(() => {
+                        loadSensorStats();
+                        loadSensorsList();
+                    }, 1000);
+                } else {
+                    resultDiv.innerHTML = `<div style="padding: 10px; background: #f8d7da; color: #721c24; border-radius: 5px;">
+                        ❌ Error: ${result.error || 'Failed to ingest data'}
+                    </div>`;
+                }
+            } catch (error) {
+                document.getElementById('ingestResult').innerHTML = 
+                    `<div style="padding: 10px; background: #f8d7da; color: #721c24; border-radius: 5px;">
+                        ❌ Error: ${error.message}
+                    </div>`;
+            }
+        }
+        
+        async function loadSensorStats() {
+            const hours = document.getElementById('statsHours').value;
+            const sensorType = document.getElementById('statsSensorType').value;
+            
+            try {
+                let url = `/api/sensor-stats?hours=${hours}`;
+                if (sensorType) {
+                    url += `&sensor_type=${sensorType}`;
+                }
+                
+                const response = await fetch(url, {
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    updateSensorStatsChart(data.data);
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to load stats'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        function updateSensorStatsChart(stats) {
+            const ctx = document.getElementById('sensorStatsChart').getContext('2d');
+            
+            if (sensorStatsChart) {
+                sensorStatsChart.destroy();
+            }
+            
+            if (stats.length === 0) {
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                ctx.fillText('Nuk ka të dhëna', 10, 50);
+                return;
+            }
+            
+            // Grupo sipas sensor_type
+            const byType = {};
+            stats.forEach(stat => {
+                if (!byType[stat.sensor_type]) {
+                    byType[stat.sensor_type] = [];
+                }
+                byType[stat.sensor_type].push(stat);
+            });
+            
+            const types = Object.keys(byType);
+            const avgValues = types.map(type => {
+                const typeStats = byType[type];
+                return typeStats.reduce((sum, s) => sum + parseFloat(s.avg_value || 0), 0) / typeStats.length;
+            });
+            
+            sensorStatsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: types,
+                    datasets: [{
+                        label: 'Mesatarja e Vlerave',
+                        data: avgValues,
+                        backgroundColor: [
+                            'rgba(102, 126, 234, 0.8)',
+                            'rgba(118, 75, 162, 0.8)',
+                            'rgba(255, 99, 132, 0.8)',
+                            'rgba(54, 162, 235, 0.8)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {beginAtZero: true}
+                    }
+                }
+            });
+        }
+        
+        async function loadSensorsList() {
+            try {
+                const response = await fetch('/api/sensor-stats?hours=1', {
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    displaySensorsList(data.data);
+                }
+            } catch (error) {
+                console.error('Error loading sensors:', error);
+            }
+        }
+        
+        function displaySensorsList(stats) {
+            const container = document.getElementById('sensorsList');
+            
+            if (stats.length === 0) {
+                container.innerHTML = '<p>Nuk ka sensorë aktivë</p>';
+                return;
+            }
+            
+            // Grupo sipas sensor_id
+            const sensors = {};
+            stats.forEach(stat => {
+                if (!sensors[stat.sensor_id]) {
+                    sensors[stat.sensor_id] = {
+                        sensor_id: stat.sensor_id,
+                        types: {}
+                    };
+                }
+                sensors[stat.sensor_id].types[stat.sensor_type] = stat;
+            });
+            
+            let html = '';
+            Object.values(sensors).forEach(sensor => {
+                const types = Object.keys(sensor.types);
+                html += `
+                    <div class="sensor-card">
+                        <h4>${sensor.sensor_id}</h4>
+                        ${types.map(type => {
+                            const stat = sensor.types[type];
+                            return `
+                                <div style="margin: 10px 0;">
+                                    <strong>${type}:</strong>
+                                    <div class="value">${parseFloat(stat.avg_value).toFixed(2)}</div>
+                                    <small>Min: ${parseFloat(stat.min_value).toFixed(2)} | Max: ${parseFloat(stat.max_value).toFixed(2)}</small>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        // Auto-load në fillim
+        window.addEventListener('load', () => {
+            loadSensorStats();
+            loadSensorsList();
+            // Refresh çdo 30 sekonda
+            setInterval(() => {
+                loadSensorStats();
+                loadSensorsList();
+            }, 30000);
+        });
+    </script>
+</body>
+</html>
+

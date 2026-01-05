@@ -254,13 +254,16 @@
                 const response = await fetch('/api/login', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username, password})
+                    body: JSON.stringify({username, password}),
+                    credentials: 'include'  // Për session cookies
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
                     authToken = data.token;
+                    localStorage.setItem('authToken', authToken);  // Ruaj në localStorage
+                    sessionStorage.setItem('authToken', authToken);  // Dhe sessionStorage
                     document.getElementById('loginSection').classList.add('hidden');
                     document.getElementById('dashboardContent').classList.remove('hidden');
                     document.getElementById('userInfo').textContent = `👤 ${data.user.username}`;
@@ -273,16 +276,38 @@
             }
         });
         
+        // Kontrollo nëse ka token në localStorage
+        const savedToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+        if (savedToken) {
+            authToken = savedToken;
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('dashboardContent').classList.remove('hidden');
+            loadDashboard();
+        }
+        
         // Load dashboard data
+        let refreshInterval = null;
+        
         async function loadDashboard() {
+            if (!authToken) {
+                document.getElementById('loginSection').classList.remove('hidden');
+                document.getElementById('dashboardContent').classList.add('hidden');
+                return;
+            }
+            
             await Promise.all([
                 loadStats(),
                 loadForecast(),
                 loadAnomalies()
             ]);
             
+            // Clear existing interval
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+            
             // Refresh every 30 seconds
-            setInterval(() => {
+            refreshInterval = setInterval(() => {
                 loadDashboard();
             }, 30000);
         }
