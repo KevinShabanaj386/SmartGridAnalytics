@@ -1,0 +1,20 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['smartgrid-prometheus:9090']
+
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['smartgrid-kafka-exporter:9308']
+
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['smartgrid-postgres-exporter:9187']
+
+  - job_name: 'smartgrid_simulated'
+    static_configs:
+      - targets: ['host.docker.internal:8000']  # Metrics nga script-i Python
