@@ -15,6 +15,15 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Setup OpenTelemetry tracing
+try:
+    from tracing import setup_tracing
+    tracer = setup_tracing(app)
+    logger.info("OpenTelemetry tracing initialized")
+except Exception as e:
+    logger.warning(f"Could not initialize tracing: {e}")
+    tracer = None
+
 # Service Discovery - Konfigurimi i shërbimeve
 SERVICES = {
     'data-ingestion': os.getenv('DATA_INGESTION_SERVICE', 'http://smartgrid-data-ingestion:5001'),

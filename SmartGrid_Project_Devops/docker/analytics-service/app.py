@@ -16,6 +16,18 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Initialize Redis caching
+try:
+    from cache import init_redis, cache_result
+    if init_redis():
+        logger.info("Redis caching enabled")
+    else:
+        logger.warning("Redis caching disabled - continuing without cache")
+        cache_result = lambda ttl=None: lambda f: f  # No-op decorator
+except Exception as e:
+    logger.warning(f"Could not initialize Redis: {e}")
+    cache_result = lambda ttl=None: lambda f: f  # No-op decorator
+
 # PostgreSQL konfigurim
 DB_CONFIG = {
     'host': os.getenv('POSTGRES_HOST', 'smartgrid-postgres'),
@@ -39,6 +51,7 @@ def health_check():
     }), 200
 
 @app.route('/api/v1/analytics/sensor/stats', methods=['GET'])
+@cache_result(ttl=300)  # Cache për 5 minuta
 def get_sensor_statistics():
     """
     Kthen statistikat për sensorët
@@ -93,6 +106,7 @@ def get_sensor_statistics():
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
 @app.route('/api/v1/analytics/predictive/load-forecast', methods=['GET'])
+@cache_result(ttl=600)  # Cache për 10 minuta
 def predict_load_forecast():
     """
     Parashikon ngarkesën për orët e ardhshme bazuar në të dhënat historike
