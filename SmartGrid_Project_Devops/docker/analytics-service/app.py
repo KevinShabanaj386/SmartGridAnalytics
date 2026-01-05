@@ -679,6 +679,106 @@ def get_convex_hull_endpoint():
         logger.error(f"Error getting convex hull: {str(e)}")
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
+# Data Mining Endpoints (kërkesë e profesorit)
+try:
+    from data_mining import kmeans_clustering, dbscan_clustering, apriori_association_rules, fp_growth_association_rules
+    DATA_MINING_AVAILABLE = True
+except ImportError:
+    logger.warning("Data mining module not available")
+    DATA_MINING_AVAILABLE = False
+
+@app.route('/api/v1/analytics/data-mining/clustering/kmeans', methods=['POST'])
+@cache_result(ttl=600)
+def kmeans_cluster_analysis():
+    """
+    K-Means Clustering për grupim të inteligjent të të dhënave.
+    Body: { "data": [...], "n_clusters": 3, "features": [...] }
+    """
+    if not DATA_MINING_AVAILABLE:
+        return jsonify({'error': 'Data mining not available'}), 503
+    
+    try:
+        data = request.get_json()
+        df = pd.DataFrame(data.get('data', []))
+        n_clusters = int(data.get('n_clusters', 3))
+        features = data.get('features')
+        
+        result = kmeans_clustering(df, n_clusters=n_clusters, features=features)
+        return jsonify(result), 200
+        
+    except Exception as e:
+        logger.error(f"Error in K-Means clustering: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/data-mining/clustering/dbscan', methods=['POST'])
+@cache_result(ttl=600)
+def dbscan_cluster_analysis():
+    """
+    DBSCAN Clustering për grupim bazuar në densitet.
+    Body: { "data": [...], "eps": 0.5, "min_samples": 5, "features": [...] }
+    """
+    if not DATA_MINING_AVAILABLE:
+        return jsonify({'error': 'Data mining not available'}), 503
+    
+    try:
+        data = request.get_json()
+        df = pd.DataFrame(data.get('data', []))
+        eps = float(data.get('eps', 0.5))
+        min_samples = int(data.get('min_samples', 5))
+        features = data.get('features')
+        
+        result = dbscan_clustering(df, eps=eps, min_samples=min_samples, features=features)
+        return jsonify(result), 200
+        
+    except Exception as e:
+        logger.error(f"Error in DBSCAN clustering: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/data-mining/association-rules/apriori', methods=['POST'])
+@cache_result(ttl=600)
+def apriori_rules():
+    """
+    Apriori Algorithm për Association Rule Mining.
+    Body: { "transactions": [[...], [...]], "min_support": 0.1, "min_confidence": 0.5 }
+    """
+    if not DATA_MINING_AVAILABLE:
+        return jsonify({'error': 'Data mining not available'}), 503
+    
+    try:
+        data = request.get_json()
+        transactions = data.get('transactions', [])
+        min_support = float(data.get('min_support', 0.1))
+        min_confidence = float(data.get('min_confidence', 0.5))
+        
+        result = apriori_association_rules(transactions, min_support=min_support, min_confidence=min_confidence)
+        return jsonify(result), 200
+        
+    except Exception as e:
+        logger.error(f"Error in Apriori algorithm: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/data-mining/association-rules/fp-growth', methods=['POST'])
+@cache_result(ttl=600)
+def fp_growth_rules():
+    """
+    FP-Growth Algorithm për Association Rule Mining.
+    Body: { "transactions": [[...], [...]], "min_support": 0.1 }
+    """
+    if not DATA_MINING_AVAILABLE:
+        return jsonify({'error': 'Data mining not available'}), 503
+    
+    try:
+        data = request.get_json()
+        transactions = data.get('transactions', [])
+        min_support = float(data.get('min_support', 0.1))
+        
+        result = fp_growth_association_rules(transactions, min_support=min_support)
+        return jsonify(result), 200
+        
+    except Exception as e:
+        logger.error(f"Error in FP-Growth algorithm: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
 if __name__ == '__main__':
     logger.info("Starting Analytics Service on port 5002")
     app.run(host='0.0.0.0', port=5002, debug=False)

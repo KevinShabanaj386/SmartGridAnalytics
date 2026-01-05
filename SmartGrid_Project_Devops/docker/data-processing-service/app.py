@@ -117,6 +117,57 @@ def create_tables():
             )
         """)
         
+        # Tabela për agregatat në kohë reale nga Spark (bazuar në Real-Time Energy Monitoring System)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sensor_aggregates_realtime (
+                id SERIAL PRIMARY KEY,
+                window_start TIMESTAMP NOT NULL,
+                window_end TIMESTAMP NOT NULL,
+                sensor_type VARCHAR(50) NOT NULL,
+                sensor_id VARCHAR(100) NOT NULL,
+                avg_value DECIMAL(10, 4),
+                min_value DECIMAL(10, 4),
+                max_value DECIMAL(10, 4),
+                count BIGINT,
+                stddev_value DECIMAL(10, 4),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Tabela për agregatat e konsumit në kohë reale
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS consumption_aggregates_realtime (
+                id SERIAL PRIMARY KEY,
+                window_start TIMESTAMP NOT NULL,
+                window_end TIMESTAMP NOT NULL,
+                customer_id VARCHAR(100) NOT NULL,
+                total_consumption DECIMAL(12, 4),
+                avg_consumption DECIMAL(12, 4),
+                reading_count BIGINT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Tabela për agregatat e motit (bazuar në Real-Time Energy Monitoring System)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS weather_aggregates_realtime (
+                id SERIAL PRIMARY KEY,
+                window_start TIMESTAMP NOT NULL,
+                window_end TIMESTAMP NOT NULL,
+                avg_temperature DECIMAL(5, 2),
+                avg_humidity DECIMAL(5, 2),
+                avg_pressure DECIMAL(7, 2),
+                avg_wind_speed DECIMAL(5, 2),
+                weather_condition VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Indekset për tabelat e reja
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_realtime_sensor_window ON sensor_aggregates_realtime(window_start, window_end)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_realtime_consumption_window ON consumption_aggregates_realtime(window_start, window_end)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_realtime_weather_window ON weather_aggregates_realtime(window_start, window_end)")
+        
         conn.commit()
         logger.info("Database tables created/verified")
     except Exception as e:
@@ -250,6 +301,48 @@ def calculate_aggregates():
     finally:
         db_pool.putconn(conn)
 
+def _process_batch(batch: List[Dict[str, Any]], batch_type: str = "sensor"):
+    """
+    Përpunon një batch të eventeve me retry logic.
+    
+    Args:
+        batch: Lista e eventeve për përpunim
+        batch_type: Lloji i batch-it ("sensor" ose "meter")
+    """
+    if not batch:
+        return
+    
+    processed_count = 0
+    failed_count = 0
+    
+    for event in batch:
+        retry_count = 0
+        success = False
+        
+        while retry_count < 3:  # Max 3 retries
+            try:
+                if batch_type == "sensor":
+                    process_sensor_data(event, retry_count)
+                else:
+                    # process_meter_reading doesn't take retry_count parameter
+                    process_meter_reading(event)
+                success = True
+                processed_count += 1
+                break
+            except Exception as e:
+                retry_count += 1
+                if retry_count >= 3:
+                    event_id = event.get('event_id') or event.get('meter_id') or event.get('reading_id', 'unknown')
+                    logger.error(f"Max retries reached for event {event_id}: {str(e)}")
+                    failed_count += 1
+                    # Në rast dështimi, mund të dërgohet në Dead Letter Queue
+                else:
+                    event_id = event.get('event_id') or event.get('meter_id') or event.get('reading_id', 'unknown')
+                    logger.warning(f"Retry {retry_count}/3 for event {event_id}: {str(e)}")
+                    time.sleep(0.1 * retry_count)  # Exponential backoff
+    
+    logger.info(f"Processed batch: {processed_count} successful, {failed_count} failed out of {len(batch)} events")
+
 def consume_sensor_data():
     """Konsumon të dhënat e sensorëve nga Kafka"""
     consumer = KafkaConsumer(
@@ -275,18 +368,7 @@ def consume_sensor_data():
                 
                 if len(batch) >= batch_size:
                     # Përpunim batch
-                    for event in batch:
-                        retry_count = 0
-                        while retry_count < 3:  # Max 3 retries
-                            try:
-                                process_sensor_data(event, retry_count)
-                                break
-                            except Exception as e:
-                                retry_count += 1
-                                if retry_count >= 3:
-                                    logger.error(f"Max retries reached for event {event.get('event_id')}")
-                                else:
-                                    logger.warning(f"Retry {retry_count} for event {event.get('event_id')}")
+                    _process_batch(batch, batch_type="sensor")
                     batch = []
                     logger.info(f"Processed batch of {batch_size} sensor events")
                     
@@ -296,8 +378,20 @@ def consume_sensor_data():
                 
     except KeyboardInterrupt:
         logger.info("Stopping consumer...")
+    except Exception as e:
+        logger.error(f"Unexpected error in consumer: {str(e)}")
     finally:
+        # Flush any remaining events in the batch before closing
+        if batch:
+            logger.info(f"Flushing remaining {len(batch)} events in batch before shutdown...")
+            try:
+                _process_batch(batch, batch_type="sensor")
+                logger.info(f"Successfully flushed {len(batch)} events")
+            except Exception as e:
+                logger.error(f"Error flushing batch: {str(e)}")
+                # Në rast dështimi, eventet mund të dërgohen në Dead Letter Queue
         consumer.close()
+        logger.info("Consumer closed")
 
 def consume_meter_readings():
     """Konsumon leximet e matësve nga Kafka"""

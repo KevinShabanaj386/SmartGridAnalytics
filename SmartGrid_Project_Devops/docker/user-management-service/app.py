@@ -2,7 +2,7 @@
 User Management Service - Mikrosherbim për menaxhimin e përdoruesve dhe autentikimin
 Implementon OAuth2, JWT dhe autorizim
 """
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, redirect, url_for
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import logging
@@ -12,6 +12,27 @@ import hashlib
 import secrets
 import jwt
 from functools import wraps
+import urllib.parse
+
+# Import OAuth2 module
+try:
+    from oauth2 import (
+        generate_authorization_code, validate_authorization_code,
+        generate_access_token, validate_access_token, refresh_access_token,
+        validate_client_credentials, OAUTH2_CLIENTS
+    )
+    OAUTH2_AVAILABLE = True
+except ImportError:
+    logger.warning("OAuth2 module not available")
+    OAUTH2_AVAILABLE = False
+
+# Import Audit Logs module
+try:
+    from audit_logs import create_audit_log, init_audit_logs_table
+    AUDIT_LOGS_AVAILABLE = True
+except ImportError:
+    logger.warning("Audit logs module not available")
+    AUDIT_LOGS_AVAILABLE = False
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -242,6 +263,18 @@ def login():
         user = cursor.fetchone()
         
         if not user:
+            # Log failed login attempt
+            if AUDIT_LOGS_AVAILABLE:
+                create_audit_log(
+                    event_type='login_failed',
+                    action='login_attempt',
+                    username=data['username'],
+                    ip_address=request.remote_addr,
+                    user_agent=request.headers.get('User-Agent'),
+                    request_path=request.path,
+                    error_message='User not found'
+                )
+            
             cursor.close()
             conn.close()
             return jsonify({'error': 'Invalid credentials'}), 401
@@ -274,6 +307,20 @@ def login():
         conn.commit()
         cursor.close()
         conn.close()
+        
+        # Log successful login (Immutable Audit Logs - kërkesë e profesorit)
+        if AUDIT_LOGS_AVAILABLE:
+            create_audit_log(
+                event_type='user_login',
+                action='login_success',
+                user_id=user['id'],
+                username=user['username'],
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent'),
+                request_method=request.method,
+                request_path=request.path,
+                response_status=200
+            )
         
         return jsonify({
             'status': 'success',
@@ -353,9 +400,152 @@ def list_users():
         'users': [dict(user) for user in users]
     }), 200
 
+# OAuth2 Endpoints (kërkesë e profesorit)
+if OAUTH2_AVAILABLE:
+    @app.route('/api/v1/auth/oauth2/authorize', methods=['GET'])
+    def oauth2_authorize():
+        """
+        OAuth2 Authorization Endpoint
+        Query params: client_id, redirect_uri, response_type, scope, state
+        """
+        try:
+            client_id = request.args.get('client_id')
+            redirect_uri = request.args.get('redirect_uri')
+            response_type = request.args.get('response_type', 'code')
+            scope = request.args.get('scope', 'read write')
+            state = request.args.get('state')
+            
+            if not client_id or not redirect_uri:
+                return jsonify({'error': 'Missing required parameters'}), 400
+            
+            if client_id not in OAUTH2_CLIENTS:
+                return jsonify({'error': 'Invalid client_id'}), 400
+            
+            client = OAUTH2_CLIENTS[client_id]
+            if redirect_uri not in client['redirect_uris']:
+                return jsonify({'error': 'Invalid redirect_uri'}), 400
+            
+            # Në prodhim, këtu do të kërkohej login i përdoruesit
+            # Për demo, përdorim user_id=1 (admin)
+            user_id = 1
+            
+            if response_type == 'code':
+                # Gjenero authorization code
+                auth_code = generate_authorization_code(client_id, str(user_id), redirect_uri)
+                
+                # Redirect me authorization code
+                params = {'code': auth_code}
+                if state:
+                    params['state'] = state
+                
+                redirect_url = f"{redirect_uri}?{urllib.parse.urlencode(params)}"
+                return redirect(redirect_url)
+            else:
+                return jsonify({'error': 'Unsupported response_type'}), 400
+                
+        except Exception as e:
+            logger.error(f"Error in OAuth2 authorize: {str(e)}")
+            return jsonify({'error': 'Internal server error'}), 500
+    
+    @app.route('/api/v1/auth/oauth2/token', methods=['POST'])
+    def oauth2_token():
+        """
+        OAuth2 Token Endpoint
+        Body: grant_type, code, client_id, client_secret, redirect_uri
+        """
+        try:
+            data = request.get_json() or request.form.to_dict()
+            grant_type = data.get('grant_type')
+            client_id = data.get('client_id')
+            client_secret = data.get('client_secret')
+            
+            if not validate_client_credentials(client_id, client_secret):
+                return jsonify({'error': 'Invalid client credentials'}), 401
+            
+            if grant_type == 'authorization_code':
+                code = data.get('code')
+                redirect_uri = data.get('redirect_uri')
+                
+                if not code or not redirect_uri:
+                    return jsonify({'error': 'Missing code or redirect_uri'}), 400
+                
+                auth_data = validate_authorization_code(code, client_id, redirect_uri)
+                if not auth_data:
+                    return jsonify({'error': 'Invalid or expired authorization code'}), 400
+                
+                user_id = auth_data['user_id']
+                scope = data.get('scope', 'read write')
+                
+                tokens = generate_access_token(user_id, client_id, scope)
+                return jsonify(tokens), 200
+                
+            elif grant_type == 'refresh_token':
+                refresh_token = data.get('refresh_token')
+                
+                if not refresh_token:
+                    return jsonify({'error': 'Missing refresh_token'}), 400
+                
+                tokens = refresh_access_token(refresh_token, client_id)
+                if not tokens:
+                    return jsonify({'error': 'Invalid or expired refresh_token'}), 400
+                
+                return jsonify(tokens), 200
+            else:
+                return jsonify({'error': 'Unsupported grant_type'}), 400
+                
+        except Exception as e:
+            logger.error(f"Error in OAuth2 token: {str(e)}")
+            return jsonify({'error': 'Internal server error'}), 500
+    
+    @app.route('/api/v1/auth/oauth2/userinfo', methods=['GET'])
+    @require_auth
+    def oauth2_userinfo():
+        """
+        OpenID Connect UserInfo Endpoint
+        Kthen informacionin e përdoruesit bazuar në access token
+        """
+        try:
+            user_id = request.current_user.get('user_id')
+            
+            conn = get_db_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            cursor.execute("""
+                SELECT id, username, email, role, created_at, last_login
+                FROM users WHERE id = %s
+            """, (user_id,))
+            
+            user = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+            
+            return jsonify({
+                'sub': str(user['id']),
+                'username': user['username'],
+                'email': user['email'],
+                'role': user['role'],
+                'created_at': user['created_at'].isoformat() if user['created_at'] else None
+            }), 200
+            
+        except Exception as e:
+            logger.error(f"Error in OAuth2 userinfo: {str(e)}")
+            return jsonify({'error': 'Internal server error'}), 500
+
 if __name__ == '__main__':
     logger.info("Initializing User Management Service...")
     init_database()
+    
+    # Initialize audit logs table
+    if AUDIT_LOGS_AVAILABLE:
+        try:
+            init_audit_logs_table()
+            logger.info("Audit logs table initialized")
+        except Exception as e:
+            logger.warning(f"Could not initialize audit logs: {e}")
+    
     logger.info("Starting User Management Service on port 5004")
     app.run(host='0.0.0.0', port=5004, debug=False)
 

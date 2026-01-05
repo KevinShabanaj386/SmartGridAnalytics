@@ -30,7 +30,8 @@ SERVICES = {
     'data-processing': os.getenv('DATA_PROCESSING_SERVICE', 'http://smartgrid-data-processing:5001'),
     'analytics': os.getenv('ANALYTICS_SERVICE', 'http://smartgrid-analytics:5002'),
     'notification': os.getenv('NOTIFICATION_SERVICE', 'http://smartgrid-notification:5003'),
-    'user-management': os.getenv('USER_MANAGEMENT_SERVICE', 'http://smartgrid-user-management:5004')
+    'user-management': os.getenv('USER_MANAGEMENT_SERVICE', 'http://smartgrid-user-management:5004'),
+    'weather-producer': os.getenv('WEATHER_PRODUCER_SERVICE', 'http://smartgrid-weather-producer:5006')
 }
 
 # Circuit Breaker State
@@ -265,6 +266,13 @@ def route_auth(subpath):
 def route_users(subpath):
     """Route kërkesat te User Management Service"""
     return proxy_request('user-management', f'/api/v1/users/{subpath}', method=request.method)
+
+# Routing për Weather Producer Service (bazuar në Real-Time Energy Monitoring System)
+@app.route('/api/v1/weather/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@require_auth
+def route_weather(subpath):
+    """Route kërkesat te Weather Producer Service"""
+    return proxy_request('weather-producer', f'/api/v1/weather/{subpath}', method=request.method)
 
 @app.route('/api/test', methods=['GET'])
 def test():
