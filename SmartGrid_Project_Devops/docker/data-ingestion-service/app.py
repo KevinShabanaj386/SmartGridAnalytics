@@ -26,8 +26,7 @@ producer = KafkaProducer(
     key_serializer=lambda k: k.encode('utf-8') if k else None,
     acks='all',  # Garantim që mesazhi është ruajtur
     retries=3,  # Retry në rast dështimi
-    max_in_flight_requests_per_connection=1,
-    enable_idempotence=True
+    max_in_flight_requests_per_connection=1
 )
 
 def create_sensor_event(sensor_id: str, sensor_type: str, value: float, 
