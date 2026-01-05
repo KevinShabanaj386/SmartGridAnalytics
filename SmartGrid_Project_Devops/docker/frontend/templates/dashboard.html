@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statistikat - Smart Grid Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Statistikat e Detajuara</h1>
+            <div class="nav">
+                <a href="/">Dashboard</a>
+                <a href="/dashboard">Statistikat</a>
+                <a href="/analytics">Analiza</a>
+                <a href="/sensors">Sensorët</a>
+            </div>
+        </div>
+        
+        <div class="dashboard-content">
+            <div class="stats-grid" id="detailedStats"></div>
+            <div class="chart-section">
+                <div class="card">
+                    <h3>Trendet e Sensorëve</h3>
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>
+

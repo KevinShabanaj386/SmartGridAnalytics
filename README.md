@@ -64,21 +64,34 @@ SmartGridAnalytics/
 └── README.md                     # Ky file
 ```
 
-## Nisja e Shpejtë
+## 🚀 Nisja e Shpejtë
 
-### Me Docker Compose (Zhvillim)
+### 1. Nisni të gjitha shërbimet
 
 ```bash
 cd SmartGrid_Project_Devops/docker
 docker-compose up -d
 ```
 
-Shërbimet do të jenë të disponueshme në:
-- API Gateway: http://localhost:5000
-- Grafana: http://localhost:3000
-- Prometheus: http://localhost:9090
+### 2. Hapni Dashboard-in Kryesor
 
-Për më shumë detaje, shikoni [QUICK_START.md](SmartGrid_Project_Devops/QUICK_START.md)
+**🎯 Frontend Dashboard**: http://localhost:8080
+
+- **Username**: `admin`
+- **Password**: `admin123`
+
+### 3. Shikoni të gjitha Interfaces
+
+- **Frontend Dashboard**: http://localhost:8080 (Dashboard interaktive)
+- **Grafana**: http://localhost:3000 (Monitoring - admin/admin)
+- **Kibana**: http://localhost:5601 (Log visualization)
+- **MLflow**: http://localhost:5005 (ML models)
+- **Jaeger**: http://localhost:16686 (Tracing)
+- **API Gateway**: http://localhost:5000 (API endpoints)
+
+Për lista të plotë të portave, shikoni [PORTS.md](SmartGrid_Project_Devops/PORTS.md)
+
+Për më shumë detaje, shikoni [START_PROJECT.md](SmartGrid_Project_Devops/START_PROJECT.md)
 
 ### Me Kubernetes (Prodhim)
 

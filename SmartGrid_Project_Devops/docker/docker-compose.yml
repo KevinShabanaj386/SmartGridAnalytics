@@ -302,6 +302,19 @@ services:
       - user-management-service
     restart: unless-stopped
 
+  # Frontend Web Application
+  frontend:
+    build: ./frontend
+    container_name: smartgrid-frontend
+    ports:
+      - "8080:8080"
+    environment:
+      - API_GATEWAY_URL=http://smartgrid-api-gateway:5000
+      - SECRET_KEY=dev-secret-key-change-in-production
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
 volumes:
   pgdata:
   grafana_data:
