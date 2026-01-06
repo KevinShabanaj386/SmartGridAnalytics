@@ -1,0 +1,99 @@
+# Default values for smartgrid
+namespace: smartgrid
+
+# Global settings
+global:
+  imageRegistry: ""
+  imagePullPolicy: IfNotPresent
+
+# Service configurations
+services:
+  apiGateway:
+    enabled: true
+    replicaCount: 3
+    image:
+      repository: smartgrid-api-gateway
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 5000
+  
+  dataIngestion:
+    enabled: true
+    replicaCount: 3
+    image:
+      repository: smartgrid-data-ingestion
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 5001
+  
+  dataProcessing:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: smartgrid-data-processing
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 5001
+  
+  analytics:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: smartgrid-analytics
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 5002
+  
+  notification:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: smartgrid-notification
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 5003
+  
+  userManagement:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: smartgrid-user-management
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 5004
+
+# Infrastructure
+infrastructure:
+  postgres:
+    enabled: true
+    host: smartgrid-postgres
+    port: 5432
+    database: smartgrid_db
+    user: smartgrid
+  
+  kafka:
+    enabled: true
+    broker: smartgrid-kafka:9092
+  
+  consul:
+    enabled: true
+    host: smartgrid-consul
+    port: 8500
+  
+  schemaRegistry:
+    enabled: true
+    url: http://smartgrid-schema-registry:8081
+
+# Auto-scaling
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80

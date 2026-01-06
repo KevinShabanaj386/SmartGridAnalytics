@@ -136,6 +136,135 @@ Ky projekt përmbush kërkesat teknike për implementimin e projekteve në Siste
 ✅ CI/CD ready (Kubernetes manifests)
 ✅ Auto-scaling dhe auto-healing
 
+## 📋 Ndryshimet e Fundit - Çfarë Është Shtuar dhe Edituar
+
+### 📁 File-a të Reja të Shtuara
+
+**Consul Service Discovery:**
+- ✨ `docker/api_gateway/consul_client.py` - Klienti i ri Consul për service discovery me fallback
+
+**Schema Registry Integration:**
+- ✨ `docker/data-ingestion-service/schema_registry_client.py` - Klienti i ri Schema Registry me Avro support
+- ✨ `schemas/avro/sensor_data.avsc` - Avro schema definition për sensor data
+
+**Helm Charts:**
+- ✨ `kubernetes/helm/smartgrid/Chart.yaml` - Helm chart metadata
+- ✨ `kubernetes/helm/smartgrid/values.yaml` - Default values për konfigurim
+- ✨ `kubernetes/helm/smartgrid/templates/_helpers.tpl` - Helper templates
+- ✨ `kubernetes/helm/smartgrid/templates/api-gateway-deployment.yaml` - Deployment template
+- ✨ `kubernetes/helm/smartgrid/templates/configmap.yaml` - ConfigMap template
+- ✨ `kubernetes/helm/smartgrid/templates/hpa.yaml` - HorizontalPodAutoscaler template
+- ✨ `kubernetes/helm/smartgrid/README.md` - Dokumentim për Helm chart
+
+### ✏️ File-a Ekzistuese të Edituara
+
+**API Gateway:**
+- 📝 `docker/api_gateway/app.py` - Shtuar integrimi i Consul për service discovery, zëvendësuar hardcoded URLs
+- 📝 `docker/api_gateway/requirements.txt` - Shtuar `consul==1.1.0`
+
+**Data Ingestion Service:**
+- 📝 `docker/data-ingestion-service/app.py` - Shtuar service registration me Consul dhe integrimi i Schema Registry me Avro
+- 📝 `docker/data-ingestion-service/requirements.txt` - Shtuar `consul==1.1.0` dhe `confluent-kafka[avro]==2.3.0`
+
+**Dokumentim:**
+- 📝 `README.md` - Përditësuar me seksione të reja për Consul, Schema Registry, dhe Helm Charts
+
+## 🆕 Përditësimet e Fundit
+
+### ✅ Consul Service Discovery - IMPLEMENTUAR
+
+**Çfarë është shtuar:**
+- Integrimi i Consul për service discovery në API Gateway
+- Shërbimet tani regjistrohen automatikisht në Consul në startup
+- API Gateway përdor Consul për të gjetur shërbimet në vend të hardcoded URLs
+- Fallback automatik në hardcoded URLs nëse Consul nuk është i disponueshëm
+
+**Vendndodhja:**
+- `docker/api_gateway/consul_client.py` - Klienti Consul për service discovery
+- `docker/api_gateway/app.py` - Integrimi i Consul në API Gateway
+- `docker/data-ingestion-service/app.py` - Service registration me Consul
+
+**Si funksionon:**
+- Aktivizohet automatikisht me `USE_CONSUL=true` (default)
+- Shërbimet regjistrohen me health checks në Consul
+- API Gateway zbulon shërbimet dinamikisht nga Consul
+
+### ✅ Schema Registry Integration - IMPLEMENTUAR
+
+**Çfarë është shtuar:**
+- Integrimi i Kafka Schema Registry me Avro serialization
+- Schema definitions për të dhënat e sensorëve
+- Versioning dhe validation automatik të skemave
+- Fallback në JSON serialization nëse Schema Registry nuk është i disponueshëm
+
+**Vendndodhja:**
+- `schemas/avro/sensor_data.avsc` - Avro schema definition
+- `docker/data-ingestion-service/schema_registry_client.py` - Klienti Schema Registry
+- `docker/data-ingestion-service/app.py` - Integrimi i Avro serialization
+
+**Si funksionon:**
+- Aktivizohet automatikisht me `USE_SCHEMA_REGISTRY=true` (default)
+- Përdor Avro me Schema Registry për serialization
+- Garantion përputhshmëri midis prodhuesve dhe konsumatorëve
+
+### ✅ Helm Charts - IMPLEMENTUAR
+
+**Çfarë është shtuar:**
+- Helm chart për deployment në Kubernetes
+- Templates për deployments, services, dhe HPA
+- Values.yaml për konfigurim fleksibël
+- Versioning dhe upgrade support
+
+**Vendndodhja:**
+- `kubernetes/helm/smartgrid/` - Helm chart directory
+  - `Chart.yaml` - Chart metadata
+  - `values.yaml` - Default values
+  - `templates/` - Kubernetes templates
+
+**Si përdoret:**
+```bash
+# Instalim
+helm install smartgrid ./kubernetes/helm/smartgrid --namespace smartgrid
+
+# Upgrade
+helm upgrade smartgrid ./kubernetes/helm/smartgrid --namespace smartgrid
+
+# Me vlera të personalizuara
+helm install smartgrid ./kubernetes/helm/smartgrid \
+  --set services.apiGateway.replicaCount=5 \
+  --namespace smartgrid
+```
+
+**Përfitimet:**
+- Deployment management më i lehtë
+- Templating për vlera të ndryshme në environmente të ndryshme
+- Versioning dhe rollback support
+- Konfigurim centralizuar
+
+### 📝 Dokumentim i Shtuar
+
+- `IMPLEMENTATION_COMPLETED.md` - Dokumentim i detajuar i implementimeve
+- `MISSING_COMPONENTS.md` - Analizë e komponentëve që mungojnë
+- `MISSING_COMPONENTS_SUMMARY.md` - Përmbledhje e shkurtër
+
+## 🔧 Konfigurim i Ri
+
+### Environment Variables të Reja
+
+**Për Consul:**
+- `USE_CONSUL=true/false` - Aktivizo/deaktivizo Consul (default: true)
+- `CONSUL_HOST=smartgrid-consul` - Consul host
+- `CONSUL_PORT=8500` - Consul port
+
+**Për Schema Registry:**
+- `USE_SCHEMA_REGISTRY=true/false` - Aktivizo/deaktivizo Schema Registry (default: true)
+- `SCHEMA_REGISTRY_URL=http://smartgrid-schema-registry:8081` - Schema Registry URL
+
+## 📦 Dependencies e Reja
+
+- `consul==1.1.0` - Consul client library (në API Gateway dhe Data Ingestion Service)
+- `confluent-kafka[avro]==2.3.0` - Avro support për Kafka (në Data Ingestion Service)
+
 ## Kontribut
 
 Ky projekt është krijuar si pjesë e kursit "Sistemet e Procesimit të Dhënave Dizajnuese".

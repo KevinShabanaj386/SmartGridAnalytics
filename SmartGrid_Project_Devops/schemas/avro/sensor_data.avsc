@@ -1,0 +1,52 @@
+{
+  "type": "record",
+  "name": "SensorData",
+  "namespace": "com.smartgrid",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string"
+    },
+    {
+      "name": "sensor_id",
+      "type": "string"
+    },
+    {
+      "name": "sensor_type",
+      "type": "string"
+    },
+    {
+      "name": "value",
+      "type": "double"
+    },
+    {
+      "name": "location",
+      "type": {
+        "type": "record",
+        "name": "Location",
+        "fields": [
+          {
+            "name": "lat",
+            "type": "double"
+          },
+          {
+            "name": "lon",
+            "type": "double"
+          }
+        ]
+      }
+    },
+    {
+      "name": "timestamp",
+      "type": "string"
+    },
+    {
+      "name": "metadata",
+      "type": {
+        "type": "map",
+        "values": "string"
+      },
+      "default": {}
+    }
+  ]
+}

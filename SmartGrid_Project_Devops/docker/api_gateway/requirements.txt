@@ -7,3 +7,4 @@ opentelemetry-instrumentation-flask==0.42b0
 opentelemetry-instrumentation-requests==0.42b0
 opentelemetry-exporter-jaeger-thrift==1.21.0
 redis==5.0.1
+consul==1.1.0

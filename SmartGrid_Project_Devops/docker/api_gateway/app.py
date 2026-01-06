@@ -24,8 +24,17 @@ except Exception as e:
     logger.warning(f"Could not initialize tracing: {e}")
     tracer = None
 
-# Service Discovery - Konfigurimi i shërbimeve
-SERVICES = {
+# Consul service discovery
+try:
+    from consul_client import discover_service
+    logger.info("Consul service discovery enabled")
+except Exception as e:
+    logger.warning(f"Could not import Consul client: {e}")
+    def discover_service(service_name: str, fallback_url: str) -> str:
+        return fallback_url
+
+# Service Discovery - Fallback URLs (used if Consul is not available)
+SERVICE_FALLBACKS = {
     'data-ingestion': os.getenv('DATA_INGESTION_SERVICE', 'http://smartgrid-data-ingestion:5001'),
     'data-processing': os.getenv('DATA_PROCESSING_SERVICE', 'http://smartgrid-data-processing:5001'),
     'analytics': os.getenv('ANALYTICS_SERVICE', 'http://smartgrid-analytics:5002'),
@@ -33,6 +42,11 @@ SERVICES = {
     'user-management': os.getenv('USER_MANAGEMENT_SERVICE', 'http://smartgrid-user-management:5004'),
     'weather-producer': os.getenv('WEATHER_PRODUCER_SERVICE', 'http://smartgrid-weather-producer:5006')
 }
+
+def get_service_url(service_name: str) -> str:
+    """Get service URL from Consul or fallback"""
+    fallback = SERVICE_FALLBACKS.get(service_name, '')
+    return discover_service(service_name, fallback)
 
 # Circuit Breaker State
 circuit_breaker_state: Dict[str, Dict[str, Any]] = {}
@@ -142,7 +156,7 @@ def proxy_request(service_name: str, path: str, method: str = 'GET',
     """
     Proxy kërkesën te shërbimi i specifikuar me retry logic
     """
-    if service_name not in SERVICES:
+    if service_name not in SERVICE_FALLBACKS:
         return jsonify({'error': f'Service {service_name} not found'}), 404
     
     # Kontrollo circuit breaker
@@ -153,7 +167,8 @@ def proxy_request(service_name: str, path: str, method: str = 'GET',
             'circuit_breaker': 'open'
         }), 503
     
-    service_url = SERVICES[service_name]
+    # Get service URL from Consul or fallback
+    service_url = get_service_url(service_name)
     url = f"{service_url}{path}"
     
     # Kopjo headers (përveç disa që duhen modifikuar)
@@ -210,7 +225,8 @@ def health_check():
     """Health check për API Gateway dhe shërbimet"""
     services_health = {}
     
-    for service_name, service_url in SERVICES.items():
+    for service_name in SERVICE_FALLBACKS.keys():
+        service_url = get_service_url(service_name)
         try:
             response = requests.get(f"{service_url}/health", timeout=2)
             services_health[service_name] = {
@@ -279,11 +295,11 @@ def test():
     """Test endpoint"""
     return jsonify({
         'message': 'API Gateway working!',
-        'services': list(SERVICES.keys()),
+        'services': list(SERVICE_FALLBACKS.keys()),
         'timestamp': datetime.utcnow().isoformat()
     })
 
 if __name__ == '__main__':
     logger.info("Starting API Gateway on port 5000")
-    logger.info(f"Registered services: {list(SERVICES.keys())}")
+    logger.info(f"Registered services: {list(SERVICE_FALLBACKS.keys())}")
     app.run(host='0.0.0.0', port=5000, debug=False)
