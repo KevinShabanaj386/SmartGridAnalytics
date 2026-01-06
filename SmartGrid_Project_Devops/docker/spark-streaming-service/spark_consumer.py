@@ -15,18 +15,33 @@ import sys
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Konfigurimi
-KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092')
-KAFKA_TOPIC_SENSOR_DATA = os.getenv('KAFKA_TOPIC_SENSOR_DATA', 'smartgrid-sensor-data')
-KAFKA_TOPIC_METER_READINGS = os.getenv('KAFKA_TOPIC_METER_READINGS', 'smartgrid-meter-readings')
-KAFKA_TOPIC_WEATHER = os.getenv('KAFKA_TOPIC_WEATHER', 'smartgrid-weather-data')
-
-# PostgreSQL konfigurim
-POSTGRES_HOST = os.getenv('POSTGRES_HOST', 'smartgrid-postgres')
-POSTGRES_PORT = os.getenv('POSTGRES_PORT', '5432')
-POSTGRES_DB = os.getenv('POSTGRES_DB', 'smartgrid_db')
-POSTGRES_USER = os.getenv('POSTGRES_USER', 'smartgrid')
-POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD', 'smartgrid123')
+# Consul Config Management
+try:
+    from consul_config import get_config
+    KAFKA_BROKER = get_config('kafka/broker', os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092'))
+    KAFKA_TOPIC_SENSOR_DATA = get_config('kafka/topic/sensor_data', os.getenv('KAFKA_TOPIC_SENSOR_DATA', 'smartgrid-sensor-data'))
+    KAFKA_TOPIC_METER_READINGS = get_config('kafka/topic/meter_readings', os.getenv('KAFKA_TOPIC_METER_READINGS', 'smartgrid-meter-readings'))
+    KAFKA_TOPIC_WEATHER = get_config('kafka/topic/weather', os.getenv('KAFKA_TOPIC_WEATHER', 'smartgrid-weather-data'))
+    
+    # PostgreSQL konfigurim nga Consul
+    POSTGRES_HOST = get_config('postgres/host', os.getenv('POSTGRES_HOST', 'smartgrid-postgres'))
+    POSTGRES_PORT = get_config('postgres/port', os.getenv('POSTGRES_PORT', '5432'))
+    POSTGRES_DB = get_config('postgres/database', os.getenv('POSTGRES_DB', 'smartgrid_db'))
+    POSTGRES_USER = get_config('postgres/user', os.getenv('POSTGRES_USER', 'smartgrid'))
+    POSTGRES_PASSWORD = get_config('postgres/password', os.getenv('POSTGRES_PASSWORD', 'smartgrid123'))
+except ImportError:
+    logger.warning("Consul config module not available, using environment variables")
+    KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092')
+    KAFKA_TOPIC_SENSOR_DATA = os.getenv('KAFKA_TOPIC_SENSOR_DATA', 'smartgrid-sensor-data')
+    KAFKA_TOPIC_METER_READINGS = os.getenv('KAFKA_TOPIC_METER_READINGS', 'smartgrid-meter-readings')
+    KAFKA_TOPIC_WEATHER = os.getenv('KAFKA_TOPIC_WEATHER', 'smartgrid-weather-data')
+    
+    # PostgreSQL konfigurim
+    POSTGRES_HOST = os.getenv('POSTGRES_HOST', 'smartgrid-postgres')
+    POSTGRES_PORT = os.getenv('POSTGRES_PORT', '5432')
+    POSTGRES_DB = os.getenv('POSTGRES_DB', 'smartgrid_db')
+    POSTGRES_USER = os.getenv('POSTGRES_USER', 'smartgrid')
+    POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD', 'smartgrid123')
 
 # Schema për sensor data
 sensor_schema = StructType([

@@ -10,7 +10,7 @@ import os
 import psycopg2
 from psycopg2.extras import execute_values
 from psycopg2.pool import SimpleConnectionPool
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import time
 import signal
 import sys
@@ -18,20 +18,57 @@ import sys
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Konfigurimi
-KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092')
-KAFKA_TOPIC_SENSOR_DATA = os.getenv('KAFKA_TOPIC_SENSOR_DATA', 'smartgrid-sensor-data')
-KAFKA_TOPIC_METER_READINGS = os.getenv('KAFKA_TOPIC_METER_READINGS', 'smartgrid-meter-readings')
-KAFKA_GROUP_ID = os.getenv('KAFKA_GROUP_ID', 'data-processing-service-group')
+def deserialize_message(message_value: bytes, schema_name: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Deserialize message from Kafka (try Avro first, fallback to JSON)
+    Helper function for value_deserializer
+    """
+    try:
+        from schema_registry_client import deserialize_message as deserialize_avro
+        return deserialize_avro(message_value, schema_name)
+    except ImportError:
+        # Fallback to JSON if schema_registry_client not available
+        try:
+            if isinstance(message_value, bytes):
+                return json.loads(message_value.decode('utf-8'))
+            elif isinstance(message_value, str):
+                return json.loads(message_value)
+            else:
+                return message_value
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return {'raw_data': str(message_value)}
 
-# PostgreSQL konfigurim
-DB_CONFIG = {
-    'host': os.getenv('POSTGRES_HOST', 'smartgrid-postgres'),
-    'port': os.getenv('POSTGRES_PORT', '5432'),
-    'database': os.getenv('POSTGRES_DB', 'smartgrid_db'),
-    'user': os.getenv('POSTGRES_USER', 'smartgrid'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'smartgrid123')
-}
+# Consul Config Management
+try:
+    from consul_config import get_config
+    KAFKA_BROKER = get_config('kafka/broker', os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092'))
+    KAFKA_TOPIC_SENSOR_DATA = get_config('kafka/topic/sensor_data', os.getenv('KAFKA_TOPIC_SENSOR_DATA', 'smartgrid-sensor-data'))
+    KAFKA_TOPIC_METER_READINGS = get_config('kafka/topic/meter_readings', os.getenv('KAFKA_TOPIC_METER_READINGS', 'smartgrid-meter-readings'))
+    KAFKA_GROUP_ID = os.getenv('KAFKA_GROUP_ID', 'data-processing-service-group')
+    
+    # PostgreSQL konfigurim nga Consul
+    DB_CONFIG = {
+        'host': get_config('postgres/host', os.getenv('POSTGRES_HOST', 'smartgrid-postgres')),
+        'port': get_config('postgres/port', os.getenv('POSTGRES_PORT', '5432')),
+        'database': get_config('postgres/database', os.getenv('POSTGRES_DB', 'smartgrid_db')),
+        'user': get_config('postgres/user', os.getenv('POSTGRES_USER', 'smartgrid')),
+        'password': get_config('postgres/password', os.getenv('POSTGRES_PASSWORD', 'smartgrid123'))
+    }
+except ImportError:
+    logger.warning("Consul config module not available, using environment variables")
+    KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092')
+    KAFKA_TOPIC_SENSOR_DATA = os.getenv('KAFKA_TOPIC_SENSOR_DATA', 'smartgrid-sensor-data')
+    KAFKA_TOPIC_METER_READINGS = os.getenv('KAFKA_TOPIC_METER_READINGS', 'smartgrid-meter-readings')
+    KAFKA_GROUP_ID = os.getenv('KAFKA_GROUP_ID', 'data-processing-service-group')
+    
+    # PostgreSQL konfigurim
+    DB_CONFIG = {
+        'host': os.getenv('POSTGRES_HOST', 'smartgrid-postgres'),
+        'port': os.getenv('POSTGRES_PORT', '5432'),
+        'database': os.getenv('POSTGRES_DB', 'smartgrid_db'),
+        'user': os.getenv('POSTGRES_USER', 'smartgrid'),
+        'password': os.getenv('POSTGRES_PASSWORD', 'smartgrid123')
+    }
 
 # Connection pool për PostgreSQL
 db_pool = None
@@ -377,7 +414,7 @@ def consume_sensor_data():
         KAFKA_TOPIC_SENSOR_DATA,
         bootstrap_servers=[KAFKA_BROKER],
         group_id=KAFKA_GROUP_ID,
-        value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+        value_deserializer=lambda m: deserialize_message(m, schema_name='sensor_data'),
         auto_offset_reset='earliest',
         enable_auto_commit=True,
         consumer_timeout_ms=1000
@@ -427,7 +464,7 @@ def consume_meter_readings():
         KAFKA_TOPIC_METER_READINGS,
         bootstrap_servers=[KAFKA_BROKER],
         group_id=f"{KAFKA_GROUP_ID}-meters",
-        value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+        value_deserializer=lambda m: deserialize_message(m, schema_name='meter_readings'),
         auto_offset_reset='earliest',
         enable_auto_commit=True,
         consumer_timeout_ms=1000

@@ -31,11 +31,34 @@ except Exception as e:
     logger.warning(f"Could not initialize Redis: {e}")
     cache_result = lambda ttl=None: lambda f: f  # No-op decorator
 
+# Consul Config Management
+try:
+    from consul_config import get_config
+    # PostgreSQL konfigurim nga Consul
+    DB_CONFIG = {
+        'host': get_config('postgres/host', os.getenv('POSTGRES_HOST', 'smartgrid-postgres')),
+        'port': get_config('postgres/port', os.getenv('POSTGRES_PORT', '5432')),
+        'database': get_config('postgres/database', os.getenv('POSTGRES_DB', 'smartgrid_db')),
+        'user': get_config('postgres/user', os.getenv('POSTGRES_USER', 'smartgrid')),
+        'password': get_config('postgres/password', os.getenv('POSTGRES_PASSWORD', 'smartgrid123'))
+    }
+    # MLflow tracking URI nga Consul
+    MLFLOW_TRACKING_URI = get_config('mlflow/tracking_uri', os.getenv('MLFLOW_TRACKING_URI', 'http://smartgrid-mlflow:5000'))
+except ImportError:
+    logger.warning("Consul config module not available, using environment variables")
+    DB_CONFIG = {
+        'host': os.getenv('POSTGRES_HOST', 'smartgrid-postgres'),
+        'port': os.getenv('POSTGRES_PORT', '5432'),
+        'database': os.getenv('POSTGRES_DB', 'smartgrid_db'),
+        'user': os.getenv('POSTGRES_USER', 'smartgrid'),
+        'password': os.getenv('POSTGRES_PASSWORD', 'smartgrid123')
+    }
+    MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://smartgrid-mlflow:5000')
+
 # Initialize MLflow
 try:
     import mlflow
     import mlflow.sklearn
-    MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://smartgrid-mlflow:5000')
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     logger.info(f"MLflow initialized: {MLFLOW_TRACKING_URI}")
     MLFLOW_AVAILABLE = True
@@ -51,15 +74,6 @@ try:
 except Exception as e:
     logger.warning(f"Could not load PostGIS utilities: {e}")
     POSTGIS_AVAILABLE = False
-
-# PostgreSQL konfigurim
-DB_CONFIG = {
-    'host': os.getenv('POSTGRES_HOST', 'smartgrid-postgres'),
-    'port': os.getenv('POSTGRES_PORT', '5432'),
-    'database': os.getenv('POSTGRES_DB', 'smartgrid_db'),
-    'user': os.getenv('POSTGRES_USER', 'smartgrid'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'smartgrid123')
-}
 
 def get_db_connection():
     """Krijon një lidhje me bazën e të dhënave"""

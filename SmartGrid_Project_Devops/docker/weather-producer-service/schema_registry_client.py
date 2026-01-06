@@ -21,7 +21,7 @@ def load_schema(schema_name: str) -> Optional[Any]:
     Load Avro schema from file
     
     Args:
-        schema_name: Name of schema file (e.g., 'sensor_data', 'meter_readings')
+        schema_name: Name of schema file (e.g., 'weather_data')
     
     Returns:
         Avro schema object or None
@@ -72,7 +72,7 @@ def get_avro_producer(schema_name: str):
     Get Avro producer for a specific schema
     
     Args:
-        schema_name: Name of schema (e.g., 'sensor_data', 'meter_readings')
+        schema_name: Name of schema (e.g., 'weather_data')
     
     Returns:
         AvroProducer instance or None
@@ -114,7 +114,7 @@ def serialize_with_schema(topic: str, data: Dict[str, Any], schema_name: str, ke
     Args:
         topic: Kafka topic name
         data: Data dictionary to serialize
-        schema_name: Name of Avro schema (e.g., 'sensor_data', 'meter_readings')
+        schema_name: Name of Avro schema (e.g., 'weather_data')
         key: Optional message key
     """
     avro_prod = get_avro_producer(schema_name)
@@ -131,3 +131,4 @@ def serialize_with_schema(topic: str, data: Dict[str, Any], schema_name: str, ke
     
     # Fallback to JSON (handled by caller)
     return False
+

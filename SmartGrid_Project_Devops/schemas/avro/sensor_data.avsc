@@ -1,23 +1,27 @@
 {
   "type": "record",
   "name": "SensorData",
-  "namespace": "com.smartgrid",
+  "namespace": "com.smartgrid.analytics",
   "fields": [
     {
       "name": "event_id",
-      "type": "string"
+      "type": "string",
+      "doc": "Unique identifier for the sensor event"
     },
     {
       "name": "sensor_id",
-      "type": "string"
+      "type": "string",
+      "doc": "Identifier of the sensor"
     },
     {
       "name": "sensor_type",
-      "type": "string"
+      "type": "string",
+      "doc": "Type of sensor (e.g., temperature, voltage, current)"
     },
     {
       "name": "value",
-      "type": "double"
+      "type": "double",
+      "doc": "Sensor reading value"
     },
     {
       "name": "location",
@@ -27,18 +31,22 @@
         "fields": [
           {
             "name": "lat",
-            "type": "double"
+            "type": "double",
+            "doc": "Latitude coordinate"
           },
           {
             "name": "lon",
-            "type": "double"
+            "type": "double",
+            "doc": "Longitude coordinate"
           }
         ]
-      }
+      },
+      "doc": "Geographic location of the sensor"
     },
     {
       "name": "timestamp",
-      "type": "string"
+      "type": "string",
+      "doc": "ISO 8601 timestamp of the reading"
     },
     {
       "name": "metadata",
@@ -46,7 +54,8 @@
         "type": "map",
         "values": "string"
       },
-      "default": {}
+      "default": {},
+      "doc": "Additional metadata as key-value pairs"
     }
   ]
 }

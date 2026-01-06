@@ -14,10 +14,17 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Konfigurimi i Kafka
-KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092')
-KAFKA_TOPIC_SENSOR_DATA = os.getenv('KAFKA_TOPIC_SENSOR_DATA', 'smartgrid-sensor-data')
-KAFKA_TOPIC_METER_READINGS = os.getenv('KAFKA_TOPIC_METER_READINGS', 'smartgrid-meter-readings')
+# Consul Config Management
+try:
+    from consul_config import get_config
+    KAFKA_BROKER = get_config('kafka/broker', os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092'))
+    KAFKA_TOPIC_SENSOR_DATA = get_config('kafka/topic/sensor_data', os.getenv('KAFKA_TOPIC_SENSOR_DATA', 'smartgrid-sensor-data'))
+    KAFKA_TOPIC_METER_READINGS = get_config('kafka/topic/meter_readings', os.getenv('KAFKA_TOPIC_METER_READINGS', 'smartgrid-meter-readings'))
+except ImportError:
+    logger.warning("Consul config module not available, using environment variables")
+    KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092')
+    KAFKA_TOPIC_SENSOR_DATA = os.getenv('KAFKA_TOPIC_SENSOR_DATA', 'smartgrid-sensor-data')
+    KAFKA_TOPIC_METER_READINGS = os.getenv('KAFKA_TOPIC_METER_READINGS', 'smartgrid-meter-readings')
 
 # Kafka Producer - lazy initialization për të shmangur lidhjen në import time
 _producer = None
@@ -100,7 +107,7 @@ def ingest_sensor_data():
             from schema_registry_client import serialize_with_schema
             
             # Try Avro with Schema Registry
-            if serialize_with_schema(KAFKA_TOPIC_SENSOR_DATA, event, key=data['sensor_id']):
+            if serialize_with_schema(KAFKA_TOPIC_SENSOR_DATA, event, schema_name='sensor_data', key=data['sensor_id']):
                 logger.info(f"Event sent to Kafka with Avro/Schema Registry: {event['event_id']}")
                 return jsonify({
                     'status': 'success',
@@ -174,6 +181,23 @@ def ingest_meter_reading():
             'unit': data.get('unit', 'kWh')
         }
         
+        # Dërgimi në Kafka - try Avro with Schema Registry first, fallback to JSON
+        try:
+            from schema_registry_client import serialize_with_schema
+            
+            # Try Avro with Schema Registry
+            if serialize_with_schema(KAFKA_TOPIC_METER_READINGS, event, schema_name='meter_readings', key=data['meter_id']):
+                logger.info(f"Event sent to Kafka with Avro/Schema Registry: {event['event_id']}")
+                return jsonify({
+                    'status': 'success',
+                    'event_id': event['event_id'],
+                    'kafka_topic': KAFKA_TOPIC_METER_READINGS,
+                    'serialization': 'avro'
+                }), 201
+        except Exception as e:
+            logger.debug(f"Avro serialization failed: {e}, falling back to JSON")
+        
+        # Fallback to JSON
         producer = get_producer()
         if producer is None:
             # Kafka nuk është i disponueshëm (p.sh. në CI/testing)

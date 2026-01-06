@@ -19,10 +19,17 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Konfigurimi
-KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092')
-KAFKA_TOPIC_WEATHER = os.getenv('KAFKA_TOPIC_WEATHER', 'smartgrid-weather-data')
-WEATHER_UPDATE_INTERVAL = int(os.getenv('WEATHER_UPDATE_INTERVAL', 60))  # sekonda
+# Consul Config Management
+try:
+    from consul_config import get_config
+    KAFKA_BROKER = get_config('kafka/broker', os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092'))
+    KAFKA_TOPIC_WEATHER = get_config('kafka/topic/weather', os.getenv('KAFKA_TOPIC_WEATHER', 'smartgrid-weather-data'))
+    WEATHER_UPDATE_INTERVAL = int(get_config('update_interval', os.getenv('WEATHER_UPDATE_INTERVAL', '60')))
+except ImportError:
+    logger.warning("Consul config module not available, using environment variables")
+    KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092')
+    KAFKA_TOPIC_WEATHER = os.getenv('KAFKA_TOPIC_WEATHER', 'smartgrid-weather-data')
+    WEATHER_UPDATE_INTERVAL = int(os.getenv('WEATHER_UPDATE_INTERVAL', 60))  # sekonda
 
 # Kafka Producer - lazy initialization për të shmangur lidhjen në import time
 _producer = None
@@ -54,17 +61,18 @@ def generate_weather_data():
     base_temp = 20.0  # Temperatura bazë
     temp_variation = random.uniform(-5, 10)
     
+    # Format për Avro schema (location si string ose null)
+    location_str = f"{round(random.uniform(41.0, 42.0), 6)},{round(random.uniform(19.0, 21.0), 6)}"
+    
     return {
         'timestamp': datetime.utcnow().isoformat() + 'Z',
         'temperature': round(base_temp + temp_variation, 2),
         'humidity': round(random.uniform(30, 90), 2),
         'pressure': round(random.uniform(980, 1020), 2),
         'wind_speed': round(random.uniform(0, 25), 2),
+        'wind_direction': round(random.uniform(0, 360), 1),
         'weather_condition': random.choice(WEATHER_CONDITIONS),
-        'location': {
-            'lat': round(random.uniform(41.0, 42.0), 6),  # Koordinata për Shqipëri
-            'lon': round(random.uniform(19.0, 21.0), 6)
-        }
+        'location': location_str
     }
 
 def weather_producer_loop():
@@ -75,30 +83,57 @@ def weather_producer_loop():
         try:
             weather_data = generate_weather_data()
             
-            # Dërgo në Kafka
-            producer = get_producer()
-            if producer is not None:
-                try:
-                    future = producer.send(
-                        KAFKA_TOPIC_WEATHER,
-                        key='weather',
-                        value=weather_data
-                    )
-                    
-                    # Prit konfirmim
-                    record_metadata = future.get(timeout=10)
-                    
+            # Dërgo në Kafka - try Avro with Schema Registry first, fallback to JSON
+            try:
+                from schema_registry_client import serialize_with_schema
+                
+                # Try Avro with Schema Registry
+                if serialize_with_schema(KAFKA_TOPIC_WEATHER, weather_data, schema_name='weather_data', key='weather'):
                     logger.info(
-                        f"Weather data sent: {weather_data['weather_condition']}, "
-                        f"Temp: {weather_data['temperature']}°C, "
-                        f"Topic: {record_metadata.topic}, "
-                        f"Partition: {record_metadata.partition}, "
-                        f"Offset: {record_metadata.offset}"
+                        f"Weather data sent with Avro: {weather_data['weather_condition']}, "
+                        f"Temp: {weather_data['temperature']}°C"
                     )
-                except Exception as e:
-                    logger.warning(f"Failed to send weather data to Kafka: {e}")
-            else:
-                logger.debug("Kafka producer not available - skipping weather data send")
+                else:
+                    # Fallback to JSON
+                    producer = get_producer()
+                    if producer is not None:
+                        try:
+                            future = producer.send(
+                                KAFKA_TOPIC_WEATHER,
+                                key='weather',
+                                value=weather_data
+                            )
+                            
+                            # Prit konfirmim
+                            record_metadata = future.get(timeout=10)
+                            
+                            logger.info(
+                                f"Weather data sent with JSON: {weather_data['weather_condition']}, "
+                                f"Temp: {weather_data['temperature']}°C, "
+                                f"Topic: {record_metadata.topic}, "
+                                f"Partition: {record_metadata.partition}, "
+                                f"Offset: {record_metadata.offset}"
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to send weather data to Kafka: {e}")
+                    else:
+                        logger.debug("Kafka producer not available - skipping weather data send")
+            except Exception as e:
+                logger.debug(f"Avro serialization failed: {e}, falling back to JSON")
+                producer = get_producer()
+                if producer is not None:
+                    try:
+                        future = producer.send(
+                            KAFKA_TOPIC_WEATHER,
+                            key='weather',
+                            value=weather_data
+                        )
+                        record_metadata = future.get(timeout=10)
+                        logger.info(f"Weather data sent with JSON: {weather_data['weather_condition']}")
+                    except Exception as e2:
+                        logger.warning(f"Failed to send weather data to Kafka: {e2}")
+                else:
+                    logger.debug("Kafka producer not available - skipping weather data send")
             
             time.sleep(WEATHER_UPDATE_INTERVAL)
             
@@ -122,6 +157,22 @@ def generate_weather():
     try:
         weather_data = generate_weather_data()
         
+        # Try Avro with Schema Registry first, fallback to JSON
+        try:
+            from schema_registry_client import serialize_with_schema
+            
+            if serialize_with_schema(KAFKA_TOPIC_WEATHER, weather_data, schema_name='weather_data', key='weather'):
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Weather data generated and sent with Avro',
+                    'weather_data': weather_data,
+                    'kafka_topic': KAFKA_TOPIC_WEATHER,
+                    'serialization': 'avro'
+                }), 201
+        except Exception as e:
+            logger.debug(f"Avro serialization failed: {e}, falling back to JSON")
+        
+        # Fallback to JSON
         producer = get_producer()
         if producer is not None:
             try:
@@ -135,11 +186,12 @@ def generate_weather():
                 
                 return jsonify({
                     'status': 'success',
-                    'message': 'Weather data generated and sent',
+                    'message': 'Weather data generated and sent with JSON',
                     'weather_data': weather_data,
                     'kafka_topic': record_metadata.topic,
                     'partition': record_metadata.partition,
-                    'offset': record_metadata.offset
+                    'offset': record_metadata.offset,
+                    'serialization': 'json'
                 }), 201
             except Exception as e:
                 logger.warning(f"Failed to send weather data to Kafka: {e}")

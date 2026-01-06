@@ -40,19 +40,35 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Konfigurimi
-JWT_SECRET = os.getenv('JWT_SECRET', 'your-secret-key-change-in-production')
-JWT_ALGORITHM = 'HS256'
-JWT_EXPIRATION_HOURS = 24
-
-# PostgreSQL konfigurim
-DB_CONFIG = {
-    'host': os.getenv('POSTGRES_HOST', 'smartgrid-postgres'),
-    'port': os.getenv('POSTGRES_PORT', '5432'),
-    'database': os.getenv('POSTGRES_DB', 'smartgrid_db'),
-    'user': os.getenv('POSTGRES_USER', 'smartgrid'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'smartgrid123')
-}
+# Consul Config Management
+try:
+    from consul_config import get_config
+    JWT_SECRET = get_config('jwt/secret', os.getenv('JWT_SECRET', 'your-secret-key-change-in-production'))
+    JWT_ALGORITHM = get_config('jwt/algorithm', 'HS256')
+    JWT_EXPIRATION_HOURS = int(get_config('jwt/expiration_hours', os.getenv('JWT_EXPIRATION_HOURS', '24')))
+    
+    # PostgreSQL konfigurim nga Consul
+    DB_CONFIG = {
+        'host': get_config('postgres/host', os.getenv('POSTGRES_HOST', 'smartgrid-postgres')),
+        'port': get_config('postgres/port', os.getenv('POSTGRES_PORT', '5432')),
+        'database': get_config('postgres/database', os.getenv('POSTGRES_DB', 'smartgrid_db')),
+        'user': get_config('postgres/user', os.getenv('POSTGRES_USER', 'smartgrid')),
+        'password': get_config('postgres/password', os.getenv('POSTGRES_PASSWORD', 'smartgrid123'))
+    }
+except ImportError:
+    logger.warning("Consul config module not available, using environment variables")
+    JWT_SECRET = os.getenv('JWT_SECRET', 'your-secret-key-change-in-production')
+    JWT_ALGORITHM = 'HS256'
+    JWT_EXPIRATION_HOURS = 24
+    
+    # PostgreSQL konfigurim
+    DB_CONFIG = {
+        'host': os.getenv('POSTGRES_HOST', 'smartgrid-postgres'),
+        'port': os.getenv('POSTGRES_PORT', '5432'),
+        'database': os.getenv('POSTGRES_DB', 'smartgrid_db'),
+        'user': os.getenv('POSTGRES_USER', 'smartgrid'),
+        'password': os.getenv('POSTGRES_PASSWORD', 'smartgrid123')
+    }
 
 def init_database():
     """Inicializon tabelat e përdoruesve"""

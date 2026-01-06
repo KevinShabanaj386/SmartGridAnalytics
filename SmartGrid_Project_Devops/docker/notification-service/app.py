@@ -16,10 +16,17 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Konfigurimi i Kafka
-KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092')
-KAFKA_TOPIC_ALERTS = os.getenv('KAFKA_TOPIC_ALERTS', 'smartgrid-alerts')
-KAFKA_TOPIC_NOTIFICATIONS = os.getenv('KAFKA_TOPIC_NOTIFICATIONS', 'smartgrid-notifications')
+# Consul Config Management
+try:
+    from consul_config import get_config
+    KAFKA_BROKER = get_config('kafka/broker', os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092'))
+    KAFKA_TOPIC_ALERTS = get_config('kafka/topic/alerts', os.getenv('KAFKA_TOPIC_ALERTS', 'smartgrid-alerts'))
+    KAFKA_TOPIC_NOTIFICATIONS = get_config('kafka/topic/notifications', os.getenv('KAFKA_TOPIC_NOTIFICATIONS', 'smartgrid-notifications'))
+except ImportError:
+    logger.warning("Consul config module not available, using environment variables")
+    KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092')
+    KAFKA_TOPIC_ALERTS = os.getenv('KAFKA_TOPIC_ALERTS', 'smartgrid-alerts')
+    KAFKA_TOPIC_NOTIFICATIONS = os.getenv('KAFKA_TOPIC_NOTIFICATIONS', 'smartgrid-notifications')
 
 # Kafka Producer - lazy initialization për të shmangur lidhjen në import time
 _producer = None
