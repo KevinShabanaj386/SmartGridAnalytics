@@ -281,8 +281,12 @@ jobs:
         KUBECONFIG: ${{ github.workspace }}/kubeconfig
       run: |
         echo "Verifying deployment..."
-        kubectl get pods -n smartgrid || echo "⚠️ Warning: Could not verify pods"
-        kubectl get services -n smartgrid || echo "⚠️ Warning: Could not verify services"
+        if [ ! -f "$KUBECONFIG" ]; then
+          echo "⚠️ Warning: KUBECONFIG file not found. Skipping verification."
+          exit 0
+        fi
+        kubectl --kubeconfig="$KUBECONFIG" get pods -n smartgrid || echo "⚠️ Warning: Could not verify pods"
+        kubectl --kubeconfig="$KUBECONFIG" get services -n smartgrid || echo "⚠️ Warning: Could not verify services"
     
     - name: Skip deployment (no KUBECONFIG)
       if: secrets.KUBECONFIG == ''
