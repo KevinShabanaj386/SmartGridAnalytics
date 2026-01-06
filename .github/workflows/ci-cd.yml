@@ -240,9 +240,14 @@ jobs:
       if: secrets.KUBECONFIG != ''
       run: |
         echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
-        export KUBECONFIG=./kubeconfig
+        export KUBECONFIG=$(pwd)/kubeconfig
         echo "KUBECONFIG=$(pwd)/kubeconfig" >> $GITHUB_ENV
-        kubectl cluster-info || echo "⚠️ Warning: Could not connect to cluster"
+        # Test cluster connection
+        kubectl cluster-info || {
+          echo "⚠️ Warning: Could not connect to cluster. KUBECONFIG may be invalid."
+          exit 0
+        }
+        echo "✅ Successfully connected to cluster"
     
     - name: Deploy në Kubernetes
       if: secrets.KUBECONFIG != ''
@@ -250,12 +255,17 @@ jobs:
         KUBECONFIG: ${{ github.workspace }}/kubeconfig
       run: |
         echo "Deploying to Kubernetes cluster..."
+        # Verify KUBECONFIG is set
+        if [ ! -f "$KUBECONFIG" ]; then
+          echo "⚠️ Warning: KUBECONFIG file not found. Skipping deployment."
+          exit 0
+        fi
         # First verify we can connect to the cluster
         kubectl cluster-info || {
           echo "⚠️ Warning: Cannot connect to cluster. Skipping deployment."
           exit 0
         }
-        # Deploy with validation disabled if needed, or use --validate=false
+        # Deploy with validation disabled to avoid OpenAPI schema download errors
         kubectl apply --validate=false -f SmartGrid_Project_Devops/kubernetes/ -n smartgrid || {
           echo "⚠️ Warning: Deployment failed. This may be expected if cluster is not available."
           exit 0
