@@ -67,6 +67,36 @@ services:
     service:
       type: ClusterIP
       port: 5004
+  
+  weatherProducer:
+    enabled: true
+    replicaCount: 1
+    image:
+      repository: smartgrid-weather-producer
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 5005
+  
+  sparkStreaming:
+    enabled: true
+    replicaCount: 1
+    image:
+      repository: smartgrid-spark-streaming
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 4040
+  
+  frontend:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: smartgrid-frontend
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 8080
 
 # Infrastructure
 infrastructure:
@@ -80,6 +110,12 @@ infrastructure:
   kafka:
     enabled: true
     broker: smartgrid-kafka:9092
+    topicSensorData: smartgrid-sensor-data
+    topicMeterReadings: smartgrid-meter-readings
+    topicAlerts: smartgrid-alerts
+    topicNotifications: smartgrid-notifications
+    topicWeather: smartgrid-weather-data
+    groupId: data-processing-service-group
   
   consul:
     enabled: true
@@ -89,6 +125,10 @@ infrastructure:
   schemaRegistry:
     enabled: true
     url: http://smartgrid-schema-registry:8081
+  
+  mlflow:
+    enabled: true
+    trackingUri: http://smartgrid-mlflow:5000
 
 # Auto-scaling
 autoscaling:
@@ -97,3 +137,8 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
+
+# Secrets (should be managed via external secret management in production)
+secrets:
+  postgresPassword: smartgrid123
+  jwtSecret: your-secret-key-change-in-production

@@ -1,14 +1,14 @@
-{{- if .Values.services.apiGateway.enabled }}
+{{- if .Values.services.analytics.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}-api-gateway
+  name: {{ .Release.Name }}-analytics-service
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "smartgrid.labels" . | nindent 4 }}
-    component: api-gateway
+    component: analytics
 spec:
-  replicas: {{ .Values.services.apiGateway.replicaCount }}
+  replicas: {{ .Values.services.analytics.replicaCount }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -17,46 +17,51 @@ spec:
   selector:
     matchLabels:
       {{- include "smartgrid.selectorLabels" . | nindent 6 }}
-      component: api-gateway
+      component: analytics
   template:
     metadata:
       labels:
         {{- include "smartgrid.selectorLabels" . | nindent 8 }}
-        component: api-gateway
+        component: analytics
     spec:
       containers:
-      - name: api-gateway
-        image: "{{ .Values.global.imageRegistry }}{{ .Values.services.apiGateway.image.repository }}:{{ .Values.services.apiGateway.image.tag }}"
+      - name: analytics
+        image: "{{ .Values.global.imageRegistry }}{{ .Values.services.analytics.image.repository }}:{{ .Values.services.analytics.image.tag }}"
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
         ports:
-        - containerPort: {{ .Values.services.apiGateway.service.port }}
+        - containerPort: {{ .Values.services.analytics.service.port }}
           name: http
         env:
-        - name: DATA_INGESTION_SERVICE
+        - name: POSTGRES_HOST
           valueFrom:
             configMapKeyRef:
               name: {{ .Release.Name }}-config
-              key: DATA_INGESTION_SERVICE
-        - name: DATA_PROCESSING_SERVICE
+              key: POSTGRES_HOST
+        - name: POSTGRES_PORT
           valueFrom:
             configMapKeyRef:
               name: {{ .Release.Name }}-config
-              key: DATA_PROCESSING_SERVICE
-        - name: ANALYTICS_SERVICE
+              key: POSTGRES_PORT
+        - name: POSTGRES_DB
           valueFrom:
             configMapKeyRef:
               name: {{ .Release.Name }}-config
-              key: ANALYTICS_SERVICE
-        - name: NOTIFICATION_SERVICE
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
           valueFrom:
             configMapKeyRef:
               name: {{ .Release.Name }}-config
-              key: NOTIFICATION_SERVICE
-        - name: USER_MANAGEMENT_SERVICE
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-secrets
+              key: POSTGRES_PASSWORD
+        - name: MLFLOW_TRACKING_URI
           valueFrom:
             configMapKeyRef:
               name: {{ .Release.Name }}-config
-              key: USER_MANAGEMENT_SERVICE
+              key: MLFLOW_TRACKING_URI
         - name: CONSUL_HOST
           valueFrom:
             configMapKeyRef:
@@ -72,39 +77,41 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: {{ .Values.services.apiGateway.service.port }}
+            port: {{ .Values.services.analytics.service.port }}
           initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 5
         readinessProbe:
           httpGet:
             path: /health
-            port: {{ .Values.services.apiGateway.service.port }}
+            port: {{ .Values.services.analytics.service.port }}
           initialDelaySeconds: 10
           periodSeconds: 5
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "100m"
+            memory: "256Mi"
+            cpu: "200m"
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "1Gi"
+            cpu: "1000m"
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Release.Name }}-api-gateway
+  name: {{ .Release.Name }}-analytics-service
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "smartgrid.labels" . | nindent 4 }}
-    component: api-gateway
+    component: analytics
 spec:
-  type: {{ .Values.services.apiGateway.service.type }}
+  type: {{ .Values.services.analytics.service.type }}
   ports:
-  - port: {{ .Values.services.apiGateway.service.port }}
-    targetPort: {{ .Values.services.apiGateway.service.port }}
+  - port: {{ .Values.services.analytics.service.port }}
+    targetPort: {{ .Values.services.analytics.service.port }}
     protocol: TCP
     name: http
   selector:
     {{- include "smartgrid.selectorLabels" . | nindent 4 }}
-    component: api-gateway
+    component: analytics
 {{- end }}
+

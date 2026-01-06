@@ -1,14 +1,14 @@
-{{- if .Values.services.apiGateway.enabled }}
+{{- if .Values.services.dataIngestion.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}-api-gateway
+  name: {{ .Release.Name }}-data-ingestion-service
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "smartgrid.labels" . | nindent 4 }}
-    component: api-gateway
+    component: data-ingestion
 spec:
-  replicas: {{ .Values.services.apiGateway.replicaCount }}
+  replicas: {{ .Values.services.dataIngestion.replicaCount }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -17,46 +17,41 @@ spec:
   selector:
     matchLabels:
       {{- include "smartgrid.selectorLabels" . | nindent 6 }}
-      component: api-gateway
+      component: data-ingestion
   template:
     metadata:
       labels:
         {{- include "smartgrid.selectorLabels" . | nindent 8 }}
-        component: api-gateway
+        component: data-ingestion
     spec:
       containers:
-      - name: api-gateway
-        image: "{{ .Values.global.imageRegistry }}{{ .Values.services.apiGateway.image.repository }}:{{ .Values.services.apiGateway.image.tag }}"
+      - name: data-ingestion
+        image: "{{ .Values.global.imageRegistry }}{{ .Values.services.dataIngestion.image.repository }}:{{ .Values.services.dataIngestion.image.tag }}"
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
         ports:
-        - containerPort: {{ .Values.services.apiGateway.service.port }}
+        - containerPort: {{ .Values.services.dataIngestion.service.port }}
           name: http
         env:
-        - name: DATA_INGESTION_SERVICE
+        - name: KAFKA_BROKER
           valueFrom:
             configMapKeyRef:
               name: {{ .Release.Name }}-config
-              key: DATA_INGESTION_SERVICE
-        - name: DATA_PROCESSING_SERVICE
+              key: KAFKA_BROKER
+        - name: KAFKA_TOPIC_SENSOR_DATA
           valueFrom:
             configMapKeyRef:
               name: {{ .Release.Name }}-config
-              key: DATA_PROCESSING_SERVICE
-        - name: ANALYTICS_SERVICE
+              key: KAFKA_TOPIC_SENSOR_DATA
+        - name: KAFKA_TOPIC_METER_READINGS
           valueFrom:
             configMapKeyRef:
               name: {{ .Release.Name }}-config
-              key: ANALYTICS_SERVICE
-        - name: NOTIFICATION_SERVICE
+              key: KAFKA_TOPIC_METER_READINGS
+        - name: SCHEMA_REGISTRY_URL
           valueFrom:
             configMapKeyRef:
               name: {{ .Release.Name }}-config
-              key: NOTIFICATION_SERVICE
-        - name: USER_MANAGEMENT_SERVICE
-          valueFrom:
-            configMapKeyRef:
-              name: {{ .Release.Name }}-config
-              key: USER_MANAGEMENT_SERVICE
+              key: SCHEMA_REGISTRY_URL
         - name: CONSUL_HOST
           valueFrom:
             configMapKeyRef:
@@ -69,18 +64,23 @@ spec:
               key: CONSUL_PORT
         - name: USE_CONSUL
           value: "true"
+        - name: USE_SCHEMA_REGISTRY
+          value: "true"
         livenessProbe:
           httpGet:
             path: /health
-            port: {{ .Values.services.apiGateway.service.port }}
+            port: {{ .Values.services.dataIngestion.service.port }}
           initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /health
-            port: {{ .Values.services.apiGateway.service.port }}
+            port: {{ .Values.services.dataIngestion.service.port }}
           initialDelaySeconds: 10
           periodSeconds: 5
+          timeoutSeconds: 3
         resources:
           requests:
             memory: "128Mi"
@@ -92,19 +92,20 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Release.Name }}-api-gateway
+  name: {{ .Release.Name }}-data-ingestion-service
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "smartgrid.labels" . | nindent 4 }}
-    component: api-gateway
+    component: data-ingestion
 spec:
-  type: {{ .Values.services.apiGateway.service.type }}
+  type: {{ .Values.services.dataIngestion.service.type }}
   ports:
-  - port: {{ .Values.services.apiGateway.service.port }}
-    targetPort: {{ .Values.services.apiGateway.service.port }}
+  - port: {{ .Values.services.dataIngestion.service.port }}
+    targetPort: {{ .Values.services.dataIngestion.service.port }}
     protocol: TCP
     name: http
   selector:
     {{- include "smartgrid.selectorLabels" . | nindent 4 }}
-    component: api-gateway
+    component: data-ingestion
 {{- end }}
+

@@ -2,7 +2,7 @@
 Common labels
 */}}
 {{- define "smartgrid.labels" -}}
-app: {{ .Values.services.apiGateway.name | default "smartgrid" }}
+app: smartgrid
 chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 release: {{ .Release.Name }}
 {{- end }}
@@ -11,6 +11,13 @@ release: {{ .Release.Name }}
 Common selector labels
 */}}
 {{- define "smartgrid.selectorLabels" -}}
-app: {{ .Values.services.apiGateway.name | default "smartgrid" }}
+app: smartgrid
 release: {{ .Release.Name }}
+{{- end }}
+
+{{/*
+Namespace
+*/}}
+{{- define "smartgrid.namespace" -}}
+{{- .Values.namespace | default "smartgrid" }}
 {{- end }}
