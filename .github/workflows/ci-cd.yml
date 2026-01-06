@@ -160,6 +160,20 @@ jobs:
           type=semver,pattern={{major}}.{{minor}}
           type=sha,prefix={{branch}}-
     
+    - name: Verify build context exists
+      run: |
+        BUILD_CONTEXT="SmartGrid_Project_Devops/docker/${{ matrix.service }}"
+        if [ ! -d "$BUILD_CONTEXT" ]; then
+          echo "❌ Error: Build context directory '$BUILD_CONTEXT' does not exist!"
+          echo "Available directories:"
+          ls -la SmartGrid_Project_Devops/docker/ | grep "^d" | awk '{print $NF}'
+          exit 1
+        fi
+        echo "✅ Build context '$BUILD_CONTEXT' exists"
+        if [ ! -f "$BUILD_CONTEXT/Dockerfile" ] && [ ! -f "$BUILD_CONTEXT/dockerfile" ]; then
+          echo "⚠️ Warning: No Dockerfile found in $BUILD_CONTEXT"
+        fi
+    
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
