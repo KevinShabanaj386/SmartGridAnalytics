@@ -95,10 +95,25 @@ def ingest_sensor_data():
             metadata=data.get('metadata', {})
         )
         
-        # Dërgimi në Kafka
+        # Dërgimi në Kafka - try Avro with Schema Registry first, fallback to JSON
+        try:
+            from schema_registry_client import serialize_with_schema
+            
+            # Try Avro with Schema Registry
+            if serialize_with_schema(KAFKA_TOPIC_SENSOR_DATA, event, key=data['sensor_id']):
+                logger.info(f"Event sent to Kafka with Avro/Schema Registry: {event['event_id']}")
+                return jsonify({
+                    'status': 'success',
+                    'event_id': event['event_id'],
+                    'kafka_topic': KAFKA_TOPIC_SENSOR_DATA,
+                    'serialization': 'avro'
+                }), 201
+        except Exception as e:
+            logger.debug(f"Avro serialization failed: {e}, falling back to JSON")
+        
+        # Fallback to JSON
         producer = get_producer()
         if producer is None:
-            # Kafka nuk është i disponueshëm (p.sh. në CI/testing)
             logger.warning("Kafka producer not available - skipping send")
             return jsonify({
                 'status': 'success',
@@ -123,7 +138,8 @@ def ingest_sensor_data():
             'event_id': event['event_id'],
             'kafka_topic': record_metadata.topic,
             'partition': record_metadata.partition,
-            'offset': record_metadata.offset
+            'offset': record_metadata.offset,
+            'serialization': 'json'
         }), 201
         
     except Exception as e:
@@ -188,8 +204,46 @@ def ingest_meter_reading():
         logger.error(f"Error ingesting meter reading: {str(e)}")
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
+# Consul service registration
+def register_with_consul():
+    """Register this service with Consul"""
+    try:
+        import consul
+        consul_host = os.getenv('CONSUL_HOST', 'smartgrid-consul')
+        consul_port = int(os.getenv('CONSUL_PORT', '8500'))
+        use_consul = os.getenv('USE_CONSUL', 'true').lower() == 'true'
+        
+        if not use_consul:
+            return
+        
+        client = consul.Consul(host=consul_host, port=consul_port)
+        
+        # Register service
+        service_id = f"data-ingestion-{os.getenv('HOSTNAME', 'default')}"
+        service_name = "data-ingestion"
+        service_address = os.getenv('SERVICE_ADDRESS', 'smartgrid-data-ingestion')
+        service_port = 5001
+        
+        client.agent.service.register(
+            name=service_name,
+            service_id=service_id,
+            address=service_address,
+            port=service_port,
+            check=consul.Check.http(
+                f'http://{service_address}:{service_port}/health',
+                interval='10s'
+            )
+        )
+        logger.info(f"Registered with Consul as {service_name} ({service_id})")
+    except Exception as e:
+        logger.warning(f"Could not register with Consul: {e}")
+
 if __name__ == '__main__':
     logger.info(f"Starting Data Ingestion Service on port 5001")
     logger.info(f"Kafka Broker: {KAFKA_BROKER}")
+    
+    # Register with Consul
+    register_with_consul()
+    
     app.run(host='0.0.0.0', port=5001, debug=False)
 

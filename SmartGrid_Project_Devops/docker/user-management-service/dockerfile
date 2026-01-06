@@ -6,7 +6,8 @@ COPY requirements.txt .
 RUN python -m pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py .
+# Copy all service source files (app.py, oauth2.py, audit_logs.py, etc.)
+COPY . .
 
 EXPOSE 5004
 
