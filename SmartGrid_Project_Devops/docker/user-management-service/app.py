@@ -23,7 +23,7 @@ try:
     )
     OAUTH2_AVAILABLE = True
 except ImportError:
-    logger.warning("OAuth2 module not available")
+    pass
     OAUTH2_AVAILABLE = False
 
 # Import Audit Logs module
@@ -31,7 +31,7 @@ try:
     from audit_logs import create_audit_log, init_audit_logs_table
     AUDIT_LOGS_AVAILABLE = True
 except ImportError:
-    logger.warning("Audit logs module not available")
+    pass
     AUDIT_LOGS_AVAILABLE = False
 
 app = Flask(__name__)

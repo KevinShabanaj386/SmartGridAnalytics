@@ -3,142 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sensor Management - Smart Grid Analytics">
     <title>Sensorët - Smart Grid Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="/static/modern-style.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        .ingest-form {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 25px;
         }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        
-        .header {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
+
+        .ingest-form h3 {
             margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            color: #1f2937;
+            font-size: 1.5rem;
         }
-        
-        .header h1 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-        
-        .nav {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-        }
-        
-        .nav a {
-            padding: 10px 20px;
-            background: #667eea;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            transition: background 0.3s;
-        }
-        
-        .nav a:hover {
-            background: #5568d3;
-        }
-        
-        .card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
             margin-bottom: 20px;
         }
-        
-        .card h3 {
-            color: #333;
-            margin-bottom: 15px;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: #555;
-        }
-        
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-        
-        .btn {
-            padding: 10px 20px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 5px;
-        }
-        
-        .btn:hover {
-            background: #5568d3;
-        }
-        
+
         .sensor-list {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 15px;
+            gap: 20px;
             margin-top: 20px;
         }
-        
+
         .sensor-card {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #667eea;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid var(--primary-color);
+            box-shadow: var(--card-shadow);
+            transition: var(--transition);
         }
-        
+
+        .sensor-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--card-shadow-hover);
+        }
+
         .sensor-card h4 {
-            color: #333;
-            margin-bottom: 10px;
+            color: #1f2937;
+            margin-bottom: 15px;
+            font-size: 1.25rem;
         }
-        
+
         .sensor-card .value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #667eea;
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin: 10px 0;
         }
-        
-        .chart-container {
-            position: relative;
-            height: 300px;
-            margin-top: 20px;
+
+        .sensor-type-card {
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 3px solid;
+            background: rgba(255, 255, 255, 0.5);
         }
-        
-        .ingest-form {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6b7280;
+            grid-column: 1 / -1;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
             margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .success-message {
+            padding: 15px;
+            background: #d1fae5;
+            color: #065f46;
+            border-radius: 8px;
+            margin-top: 15px;
+            border-left: 4px solid var(--success-color);
+        }
+
+        .error-message {
+            padding: 15px;
+            background: #fee2e2;
+            color: #991b1b;
+            border-radius: 8px;
+            margin-top: 15px;
+            border-left: 4px solid var(--danger-color);
+        }
+
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .sensor-list {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -146,25 +123,25 @@
     <div class="container">
         <div class="header">
             <h1>📡 Menaxhimi i Sensorëve</h1>
-            <div class="nav">
+            <nav class="nav" role="navigation" aria-label="Main navigation">
                 <a href="/">Dashboard</a>
                 <a href="/dashboard">Statistikat</a>
                 <a href="/analytics">Analiza</a>
-                <a href="/sensors">Sensorët</a>
-            </div>
+                <a href="/sensors" class="active" aria-current="page">Sensorët</a>
+            </nav>
         </div>
         
-        <div class="ingest-form">
-            <h3>➕ Dërgo të Dhëna Sensor</h3>
-            <form id="ingestForm" onsubmit="ingestSensor(event)">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+        <section class="ingest-form" aria-labelledby="ingest-heading">
+            <h3 id="ingest-heading">➕ Dërgo të Dhëna Sensor</h3>
+            <form id="ingestForm" onsubmit="ingestSensor(event)" aria-label="Sensor data ingestion form">
+                <div class="form-grid">
                     <div class="form-group">
-                        <label>Sensor ID:</label>
-                        <input type="text" id="sensorId" value="sensor_001" required>
+                        <label for="sensorId">Sensor ID:</label>
+                        <input type="text" id="sensorId" value="sensor_001" required aria-required="true">
                     </div>
                     <div class="form-group">
-                        <label>Lloji i Sensorit:</label>
-                        <select id="sensorType" required>
+                        <label for="sensorType">Lloji i Sensorit:</label>
+                        <select id="sensorType" required aria-required="true">
                             <option value="voltage">Voltage</option>
                             <option value="current">Current</option>
                             <option value="power">Power</option>
@@ -172,51 +149,58 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Vlera:</label>
-                        <input type="number" id="sensorValue" step="0.01" value="220.5" required>
+                        <label for="sensorValue">Vlera:</label>
+                        <input type="number" id="sensorValue" step="0.01" value="220.5" required aria-required="true">
                     </div>
                     <div class="form-group">
-                        <label>Latitude:</label>
-                        <input type="number" id="latitude" step="0.0001" value="41.3275" required>
+                        <label for="latitude">Latitude:</label>
+                        <input type="number" id="latitude" step="0.0001" value="41.3275" required aria-required="true">
                     </div>
                     <div class="form-group">
-                        <label>Longitude:</label>
-                        <input type="number" id="longitude" step="0.0001" value="19.8187" required>
+                        <label for="longitude">Longitude:</label>
+                        <input type="number" id="longitude" step="0.0001" value="19.8187" required aria-required="true">
                     </div>
                 </div>
-                <button type="submit" class="btn" style="margin-top: 15px;">Dërgo të Dhëna</button>
+                <button type="submit" class="btn" aria-label="Submit sensor data">Dërgo të Dhëna</button>
             </form>
-            <div id="ingestResult" style="margin-top: 15px;"></div>
-        </div>
+            <div id="ingestResult" role="alert" aria-live="polite"></div>
+        </section>
         
-        <div class="card">
-            <h3>📊 Statistikat e Sensorëve</h3>
-            <div class="form-group">
-                <label>Orët:</label>
-                <input type="number" id="statsHours" value="24" min="1" max="168">
+        <article class="card" aria-labelledby="stats-heading">
+            <h3 id="stats-heading">📊 Statistikat e Sensorëve</h3>
+            <div class="form-grid" style="margin-bottom: 20px;">
+                <div class="form-group">
+                    <label for="statsHours">Orët:</label>
+                    <input type="number" id="statsHours" value="24" min="1" max="168" aria-label="Statistics hours">
+                </div>
+                <div class="form-group">
+                    <label for="statsSensorType">Lloji i Sensorit (opsionale):</label>
+                    <select id="statsSensorType" aria-label="Sensor type filter">
+                        <option value="">Të gjitha</option>
+                        <option value="voltage">Voltage</option>
+                        <option value="current">Current</option>
+                        <option value="power">Power</option>
+                        <option value="frequency">Frequency</option>
+                    </select>
+                </div>
+                <div class="form-group" style="display: flex; align-items: flex-end;">
+                    <button class="btn" onclick="loadSensorStats()" aria-label="Load sensor statistics">Shiko Statistikat</button>
+                </div>
             </div>
-            <div class="form-group">
-                <label>Lloji i Sensorit (opsionale):</label>
-                <select id="statsSensorType">
-                    <option value="">Të gjitha</option>
-                    <option value="voltage">Voltage</option>
-                    <option value="current">Current</option>
-                    <option value="power">Power</option>
-                    <option value="frequency">Frequency</option>
-                </select>
-            </div>
-            <button class="btn" onclick="loadSensorStats()">Shiko Statistikat</button>
             <div class="chart-container">
-                <canvas id="sensorStatsChart"></canvas>
+                <canvas id="sensorStatsChart" aria-label="Sensor statistics chart"></canvas>
             </div>
-        </div>
+        </article>
         
-        <div class="card">
-            <h3>📍 Sensorët Aktivë</h3>
-            <div id="sensorsList" class="sensor-list">
-                <!-- Sensorët do të shfaqen këtu -->
+        <article class="card" aria-labelledby="sensors-list-heading">
+            <h3 id="sensors-list-heading">📍 Sensorët Aktivë</h3>
+            <div id="sensorsList" class="sensor-list" role="list" aria-label="Active sensors list">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📡</div>
+                    <h3>Duke ngarkuar sensorët...</h3>
+                </div>
             </div>
-        </div>
+        </article>
     </div>
     
     <script>
@@ -224,12 +208,11 @@
         let sensorStatsChart = null;
         let refreshInterval = null;
         
-        // Kontrollo nëse ka token
+        // Check authentication
         if (!authToken) {
             window.location.href = '/';
         }
         
-        // Auto-refresh token nëse ka
         function checkAuth() {
             if (!authToken) {
                 window.location.href = '/';
@@ -239,6 +222,12 @@
         async function ingestSensor(event) {
             event.preventDefault();
             checkAuth();
+            
+            const form = event.target;
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Duke dërguar...';
             
             const data = {
                 sensor_id: document.getElementById('sensorId').value,
@@ -251,7 +240,7 @@
             };
             
             const resultDiv = document.getElementById('ingestResult');
-            resultDiv.innerHTML = '<div style="padding: 10px; color: #666;">⏳ Dërgim në proces...</div>';
+            resultDiv.innerHTML = '<div class="alert alert-info">⏳ Dërgim në proces...</div>';
             
             try {
                 const response = await fetch('/api/ingest-sensor', {
@@ -267,30 +256,40 @@
                 const result = await response.json();
                 
                 if (response.status === 201) {
-                    resultDiv.innerHTML = `<div style="padding: 10px; background: #d4edda; color: #155724; border-radius: 5px;">
-                        ✅ Të dhënat u dërguan me sukses!<br>
-                        <small>Event ID: ${result.event_id} | Topic: ${result.kafka_topic || 'N/A'}</small>
-                    </div>`;
-                    // Reload stats pas dërgimit
+                    resultDiv.innerHTML = `
+                        <div class="success-message">
+                            ✅ Të dhënat u dërguan me sukses!<br>
+                            <small>Event ID: ${result.event_id} | Topic: ${result.kafka_topic || 'N/A'}</small>
+                        </div>
+                    `;
+                    // Reload stats after sending
                     setTimeout(() => {
                         loadSensorStats();
                         loadSensorsList();
                     }, 1000);
                 } else if (response.status === 401) {
-                    // Token expired, redirect to login
-                    resultDiv.innerHTML = `<div style="padding: 10px; background: #fff3cd; color: #856404; border-radius: 5px;">
-                        ⚠️ Session ka skaduar. Ju lutem hyni përsëri.
-                    </div>`;
+                    resultDiv.innerHTML = `
+                        <div class="error-message">
+                            ⚠️ Session ka skaduar. Ju lutem hyni përsëri.
+                        </div>
+                    `;
                     setTimeout(() => window.location.href = '/', 2000);
                 } else {
-                    resultDiv.innerHTML = `<div style="padding: 10px; background: #f8d7da; color: #721c24; border-radius: 5px;">
-                        ❌ Error: ${result.error || 'Failed to ingest data'}
-                    </div>`;
+                    resultDiv.innerHTML = `
+                        <div class="error-message">
+                            ❌ Error: ${result.error || 'Failed to ingest data'}
+                        </div>
+                    `;
                 }
             } catch (error) {
-                resultDiv.innerHTML = `<div style="padding: 10px; background: #f8d7da; color: #721c24; border-radius: 5px;">
-                    ❌ Error: ${error.message}
-                </div>`;
+                resultDiv.innerHTML = `
+                    <div class="error-message">
+                        ❌ Error: ${error.message}
+                    </div>
+                `;
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
             }
         }
         
@@ -335,18 +334,18 @@
             }
             
             if (!stats || stats.length === 0) {
-                // Shfaq mesazh nëse nuk ka të dhëna
                 const container = document.getElementById('sensorStatsChart').parentElement;
                 container.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #666;">
-                        <p style="font-size: 16px;">📊 Nuk ka të dhëna për të shfaqur</p>
-                        <p style="font-size: 14px; margin-top: 10px;">Dërgoni të dhëna sensor për të parë statistikat</p>
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📊</div>
+                        <h3>Nuk ka të dhëna për të shfaqur</h3>
+                        <p>Dërgoni të dhëna sensor për të parë statistikat</p>
                     </div>
                 `;
                 return;
             }
             
-            // Grupo sipas sensor_type
+            // Group by sensor_type
             const byType = {};
             stats.forEach(stat => {
                 if (!byType[stat.sensor_type]) {
@@ -396,13 +395,23 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: {
-                        y: {beginAtZero: true}
-                    },
                     plugins: {
                         legend: {
                             display: true,
                             position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Vlera'
+                            }
                         }
                     }
                 }
@@ -440,15 +449,16 @@
             
             if (!stats || stats.length === 0) {
                 container.innerHTML = `
-                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #666;">
-                        <p style="font-size: 18px; margin-bottom: 10px;">📡 Nuk ka sensorë aktivë</p>
-                        <p style="font-size: 14px;">Dërgoni të dhëna për të parë sensorët këtu</p>
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📡</div>
+                        <h3>Nuk ka sensorë aktivë</h3>
+                        <p>Dërgoni të dhëna për të parë sensorët këtu</p>
                     </div>
                 `;
                 return;
             }
             
-            // Grupo sipas sensor_id
+            // Group by sensor_id
             const sensors = {};
             stats.forEach(stat => {
                 if (!sensors[stat.sensor_id]) {
@@ -473,19 +483,19 @@
                 };
                 
                 html += `
-                    <div class="sensor-card">
+                    <div class="sensor-card" role="listitem">
                         <h4>📡 ${sensor.sensor_id}</h4>
-                        <div style="margin-bottom: 10px; color: #666; font-size: 12px;">
+                        <div style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">
                             Lexime: ${sensor.count} | Lloje: ${types.length}
                         </div>
                         ${types.map(type => {
                             const stat = sensor.types[type];
                             const color = typeColors[type] || '#667eea';
                             return `
-                                <div style="margin: 10px 0; padding: 10px; background: ${color}15; border-radius: 5px; border-left: 3px solid ${color};">
+                                <div class="sensor-type-card" style="border-left-color: ${color};">
                                     <strong style="color: ${color};">${type.toUpperCase()}:</strong>
                                     <div class="value" style="color: ${color};">${parseFloat(stat.avg_value || 0).toFixed(2)}</div>
-                                    <small style="color: #666;">
+                                    <small style="color: #6b7280; font-size: 12px;">
                                         Min: ${parseFloat(stat.min_value || 0).toFixed(2)} | 
                                         Max: ${parseFloat(stat.max_value || 0).toFixed(2)} | 
                                         StdDev: ${parseFloat(stat.stddev_value || 0).toFixed(2)}
@@ -500,18 +510,16 @@
             container.innerHTML = html;
         }
         
-        // Auto-load në fillim
+        // Auto-load on page load
         window.addEventListener('load', () => {
             if (authToken) {
                 loadSensorStats();
                 loadSensorsList();
                 
-                // Clear existing interval
                 if (refreshInterval) {
                     clearInterval(refreshInterval);
                 }
                 
-                // Refresh çdo 30 sekonda
                 refreshInterval = setInterval(() => {
                     checkAuth();
                     loadSensorStats();
@@ -522,7 +530,7 @@
             }
         });
         
-        // Cleanup on page unload
+        // Cleanup
         window.addEventListener('beforeunload', () => {
             if (refreshInterval) {
                 clearInterval(refreshInterval);
@@ -531,4 +539,3 @@
     </script>
 </body>
 </html>
-

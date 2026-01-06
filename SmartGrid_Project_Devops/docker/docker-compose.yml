@@ -330,25 +330,26 @@ services:
     restart: unless-stopped
 
   # Apache Spark Structured Streaming Service (bazuar në Real-Time Energy Monitoring System)
-  spark-streaming:
-    build: ./spark-streaming-service
-    container_name: smartgrid-spark-streaming
-    environment:
-      - KAFKA_BROKER=smartgrid-kafka:9092
-      - KAFKA_TOPIC_SENSOR_DATA=smartgrid-sensor-data
-      - KAFKA_TOPIC_METER_READINGS=smartgrid-meter-readings
-      - KAFKA_TOPIC_WEATHER=smartgrid-weather-data
-      - POSTGRES_HOST=smartgrid-postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=smartgrid_db
-      - POSTGRES_USER=smartgrid
-      - POSTGRES_PASSWORD=smartgrid123
-    depends_on:
-      - kafka
-      - postgres
-    volumes:
-      - spark-checkpoint:/tmp/spark-checkpoint
-    restart: unless-stopped
+  # Temporarily disabled - Spark image version issue
+  # spark-streaming:
+  #   build: ./spark-streaming-service
+  #   container_name: smartgrid-spark-streaming
+  #   environment:
+  #     - KAFKA_BROKER=smartgrid-kafka:9092
+  #     - KAFKA_TOPIC_SENSOR_DATA=smartgrid-sensor-data
+  #     - KAFKA_TOPIC_METER_READINGS=smartgrid-meter-readings
+  #     - KAFKA_TOPIC_WEATHER=smartgrid-weather-data
+  #     - POSTGRES_HOST=smartgrid-postgres
+  #     - POSTGRES_PORT=5432
+  #     - POSTGRES_DB=smartgrid_db
+  #     - POSTGRES_USER=smartgrid
+  #     - POSTGRES_PASSWORD=smartgrid123
+  #   depends_on:
+  #     - kafka
+  #     - postgres
+  #   volumes:
+  #     - spark-checkpoint:/tmp/spark-checkpoint
+  #   restart: unless-stopped
 
   # HashiCorp Vault për Secrets Management (kërkesë e profesorit)
   vault:
@@ -370,7 +371,7 @@ services:
 
   # Consul për Service Discovery dhe Config Management (kërkesë e profesorit)
   consul:
-    image: consul:1.17
+    image: hashicorp/consul:latest
     container_name: smartgrid-consul
     ports:
       - "8500:8500"
@@ -388,7 +389,7 @@ services:
     image: sonarqube:community
     container_name: smartgrid-sonarqube
     ports:
-      - "9000:9000"
+      - "9002:9000"
     environment:
       - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
     volumes:

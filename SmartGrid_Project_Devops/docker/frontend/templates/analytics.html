@@ -3,114 +3,106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Advanced Analytics - Smart Grid Analytics">
     <title>Analiza - Smart Grid Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="/static/modern-style.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+        .analytics-controls {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
             padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        
-        .header {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        
-        .header h1 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-        
-        .nav {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-        }
-        
-        .nav a {
-            padding: 10px 20px;
-            background: #667eea;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            transition: background 0.3s;
-        }
-        
-        .nav a:hover {
-            background: #5568d3;
-        }
-        
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 20px;
+
+        .anomalies-container {
             margin-top: 20px;
-        }
-        
-        .card {
-            background: white;
-            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 10px;
+            background: #f9fafb;
             border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        
-        .card h3 {
-            color: #333;
-            margin-bottom: 15px;
+
+        .anomaly-card {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            border-left: 4px solid;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: var(--transition);
+            animation: slideIn 0.3s ease-out;
         }
-        
-        .chart-container {
-            position: relative;
-            height: 300px;
-            margin-top: 20px;
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
-        
-        .btn {
-            padding: 10px 20px;
-            background: #667eea;
+
+        .anomaly-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .anomaly-card.high_consumption {
+            border-left-color: var(--warning-color);
+            background: linear-gradient(90deg, #fef3c7 0%, white 10%);
+        }
+
+        .anomaly-card.very_high {
+            border-left-color: var(--danger-color);
+            background: linear-gradient(90deg, #fee2e2 0%, white 10%);
+        }
+
+        .anomaly-card.moderate {
+            border-left-color: #94a3b8;
+            background: linear-gradient(90deg, #f1f5f9 0%, white 10%);
+        }
+
+        .anomaly-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .badge-high {
+            background: var(--warning-color);
             color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 5px;
         }
-        
-        .btn:hover {
-            background: #5568d3;
+
+        .badge-very-high {
+            background: var(--danger-color);
+            color: white;
         }
-        
-        .form-group {
-            margin-bottom: 15px;
+
+        .badge-moderate {
+            background: #94a3b8;
+            color: white;
         }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: #555;
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6b7280;
         }
-        
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -118,67 +110,77 @@
     <div class="container">
         <div class="header">
             <h1>📊 Analiza të Avancuara</h1>
-            <div class="nav">
+            <nav class="nav" role="navigation" aria-label="Main navigation">
                 <a href="/">Dashboard</a>
                 <a href="/dashboard">Statistikat</a>
-                <a href="/analytics">Analiza</a>
+                <a href="/analytics" class="active" aria-current="page">Analiza</a>
                 <a href="/sensors">Sensorët</a>
-            </div>
+            </nav>
         </div>
         
-        <div class="dashboard-grid">
-            <div class="card">
-                <h3>🔮 Parashikim Ngarkese</h3>
-                <div class="form-group">
-                    <label>Orët për parashikim:</label>
-                    <input type="number" id="forecastHours" value="24" min="1" max="168">
+        <main class="dashboard-grid">
+            <article class="card" aria-labelledby="forecast-heading">
+                <h3 id="forecast-heading">🔮 Parashikim Ngarkese</h3>
+                <div class="analytics-controls">
+                    <div class="form-group">
+                        <label for="forecastHours">Orët për parashikim:</label>
+                        <input type="number" id="forecastHours" value="24" min="1" max="168" aria-label="Forecast hours">
+                    </div>
+                    <div class="form-group">
+                        <label for="useML">Përdor ML Model:</label>
+                        <select id="useML" aria-label="Use ML model">
+                            <option value="true">Po (MLflow)</option>
+                            <option value="false">Jo (Simple)</option>
+                        </select>
+                    </div>
+                    <button class="btn" onclick="loadForecast()" aria-label="Load forecast">Parashiko</button>
                 </div>
-                <div class="form-group">
-                    <label>Përdor ML Model:</label>
-                    <select id="useML">
-                        <option value="true">Po (MLflow)</option>
-                        <option value="false">Jo (Simple)</option>
-                    </select>
-                </div>
-                <button class="btn" onclick="loadForecast()">Parashiko</button>
                 <div class="chart-container">
-                    <canvas id="forecastChart"></canvas>
+                    <canvas id="forecastChart" aria-label="Load forecast chart"></canvas>
                 </div>
-            </div>
+            </article>
             
-            <div class="card">
-                <h3>⚠️ Zbulim Anomalish (ML-Powered)</h3>
-                <div class="form-group">
-                    <label>Metoda:</label>
-                    <select id="anomalyMethod">
-                        <option value="ml">Random Forest ML (98.6% accuracy)</option>
-                        <option value="zscore">Z-Score (Traditional)</option>
-                    </select>
+            <article class="card" aria-labelledby="anomalies-heading">
+                <h3 id="anomalies-heading">⚠️ Zbulim Anomalish (ML-Powered)</h3>
+                <div class="analytics-controls">
+                    <div class="form-group">
+                        <label for="anomalyMethod">Metoda:</label>
+                        <select id="anomalyMethod" aria-label="Anomaly detection method">
+                            <option value="ml">Random Forest ML (98.6% accuracy)</option>
+                            <option value="zscore">Z-Score (Traditional)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="anomalySensorId">Sensor ID (opsionale):</label>
+                        <input type="text" id="anomalySensorId" placeholder="sensor_001" aria-label="Sensor ID filter">
+                    </div>
+                    <div class="form-group" id="thresholdGroup">
+                        <label for="anomalyThreshold">Threshold (Z-score):</label>
+                        <input type="number" id="anomalyThreshold" value="3.0" step="0.1" aria-label="Anomaly threshold">
+                    </div>
+                    <button class="btn" onclick="loadAnomalies()" aria-label="Detect anomalies">🔍 Zbulo Anomalitë</button>
                 </div>
-                <div class="form-group">
-                    <label>Sensor ID (opsionale):</label>
-                    <input type="text" id="anomalySensorId" placeholder="sensor_001">
+                <div id="anomaliesContainer" class="anomalies-container" role="region" aria-label="Anomalies results">
+                    <div class="empty-state">
+                        <p>Klikoni "Zbulo Anomalitë" për të filluar</p>
+                    </div>
                 </div>
-                <div class="form-group" id="thresholdGroup">
-                    <label>Threshold (Z-score):</label>
-                    <input type="number" id="anomalyThreshold" value="3.0" step="0.1">
-                </div>
-                <button class="btn" onclick="loadAnomalies()">🔍 Zbulo Anomalitë</button>
-                <div id="anomaliesContainer" style="margin-top: 20px; max-height: 500px; overflow-y: auto;"></div>
-            </div>
+            </article>
             
-            <div class="card">
-                <h3>📈 Trendet e Konsumit</h3>
-                <div class="form-group">
-                    <label>Ditët:</label>
-                    <input type="number" id="trendDays" value="30" min="1" max="365">
+            <article class="card" aria-labelledby="trends-heading">
+                <h3 id="trends-heading">📈 Trendet e Konsumit</h3>
+                <div class="analytics-controls">
+                    <div class="form-group">
+                        <label for="trendDays">Ditët:</label>
+                        <input type="number" id="trendDays" value="30" min="1" max="365" aria-label="Trend days">
+                    </div>
+                    <button class="btn" onclick="loadTrends()" aria-label="Load trends">Shiko Trendet</button>
                 </div>
-                <button class="btn" onclick="loadTrends()">Shiko Trendet</button>
                 <div class="chart-container">
-                    <canvas id="trendsChart"></canvas>
+                    <canvas id="trendsChart" aria-label="Consumption trends chart"></canvas>
                 </div>
-            </div>
-        </div>
+            </article>
+        </main>
     </div>
     
     <script>
@@ -187,7 +189,7 @@
         let trendsChart = null;
         let refreshInterval = null;
         
-        // Kontrollo nëse ka token
+        // Check authentication
         if (!authToken) {
             window.location.href = '/';
         }
@@ -197,6 +199,16 @@
                 window.location.href = '/';
             }
         }
+        
+        // Toggle threshold field based on method
+        document.getElementById('anomalyMethod').addEventListener('change', function() {
+            const thresholdGroup = document.getElementById('thresholdGroup');
+            if (this.value === 'ml') {
+                thresholdGroup.style.display = 'none';
+            } else {
+                thresholdGroup.style.display = 'block';
+            }
+        });
         
         async function loadForecast() {
             checkAuth();
@@ -233,12 +245,16 @@
                 forecastChart.destroy();
             }
             
+            if (!forecast || forecast.length === 0) {
+                return;
+            }
+            
             forecastChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: forecast.map(f => new Date(f.timestamp).toLocaleString()),
                     datasets: [{
-                        label: `Parashikim (${model})`,
+                        label: `Parashikim (${model || 'ML'})`,
                         data: forecast.map(f => f.predicted_load),
                         borderColor: 'rgb(102, 126, 234)',
                         backgroundColor: 'rgba(102, 126, 234, 0.1)',
@@ -249,8 +265,24 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
                     scales: {
-                        y: {beginAtZero: true}
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Ngarkesa (kW)'
+                            }
+                        }
                     }
                 }
             });
@@ -262,20 +294,17 @@
             const threshold = document.getElementById('anomalyThreshold').value;
             const method = document.getElementById('anomalyMethod').value;
             
-            // Show loading
             const container = document.getElementById('anomaliesContainer');
             container.innerHTML = '<div class="alert alert-info">🔄 Po zbuloj anomalitë...</div>';
             
             try {
                 let url;
                 if (method === 'ml') {
-                    // Përdor Random Forest ML endpoint
                     url = `/api/anomalies/ml?hours=24`;
                     if (sensorId) {
                         url += `&sensor_id=${sensorId}`;
                     }
                 } else {
-                    // Përdor Z-Score method
                     url = `/api/anomalies?threshold=${threshold}`;
                     if (sensorId) {
                         url += `&sensor_id=${sensorId}`;
@@ -308,7 +337,7 @@
         function displayAnomalies(anomalies, stats, method = 'z_score', modelAccuracy = null) {
             const container = document.getElementById('anomaliesContainer');
             
-            if (anomalies.length === 0) {
+            if (!anomalies || anomalies.length === 0) {
                 container.innerHTML = '<div class="alert alert-success">✅ Nuk ka anomalitë të zbuluara. Sistemi funksionon normalisht!</div>';
                 return;
             }
@@ -364,16 +393,6 @@
             container.innerHTML = html;
         }
         
-        // Toggle threshold field bazuar në metodë
-        document.getElementById('anomalyMethod').addEventListener('change', function() {
-            const thresholdGroup = document.getElementById('thresholdGroup');
-            if (this.value === 'ml') {
-                thresholdGroup.style.display = 'none';
-            } else {
-                thresholdGroup.style.display = 'block';
-            }
-        });
-        
         async function loadTrends() {
             checkAuth();
             const days = document.getElementById('trendDays').value;
@@ -408,6 +427,10 @@
                 trendsChart.destroy();
             }
             
+            if (!trends || trends.length === 0) {
+                return;
+            }
+            
             trendsChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -424,26 +447,40 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
                     scales: {
-                        y: {beginAtZero: true}
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Konsum (kWh)'
+                            }
+                        }
                     }
                 }
             });
         }
         
-        // Auto-load në fillim
+        // Auto-load on page load
         window.addEventListener('load', () => {
             if (authToken) {
                 loadForecast();
                 loadAnomalies();
                 loadTrends();
                 
-                // Clear existing interval
                 if (refreshInterval) {
                     clearInterval(refreshInterval);
                 }
                 
-                // Refresh çdo 60 sekonda
                 refreshInterval = setInterval(() => {
                     checkAuth();
                     loadForecast();
@@ -455,7 +492,7 @@
             }
         });
         
-        // Cleanup on page unload
+        // Cleanup
         window.addEventListener('beforeunload', () => {
             if (refreshInterval) {
                 clearInterval(refreshInterval);
@@ -464,4 +501,3 @@
     </script>
 </body>
 </html>
-

@@ -3,33 +3,292 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Detailed Statistics Dashboard - Smart Grid Analytics">
     <title>Statistikat - Smart Grid Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/modern-style.css">
+    <style>
+        .dashboard-content {
+            margin-top: 25px;
+        }
+
+        .chart-section {
+            margin-top: 25px;
+        }
+
+        .filter-controls {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .filter-controls h3 {
+            margin-bottom: 20px;
+            color: #1f2937;
+        }
+
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6b7280;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 768px) {
+            .filter-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>📊 Statistikat e Detajuara</h1>
-            <div class="nav">
+            <nav class="nav" role="navigation" aria-label="Main navigation">
                 <a href="/">Dashboard</a>
-                <a href="/dashboard">Statistikat</a>
+                <a href="/dashboard" class="active" aria-current="page">Statistikat</a>
                 <a href="/analytics">Analiza</a>
                 <a href="/sensors">Sensorët</a>
-            </div>
+            </nav>
         </div>
         
-        <div class="dashboard-content">
-            <div class="stats-grid" id="detailedStats"></div>
-            <div class="chart-section">
-                <div class="card">
-                    <h3>Trendet e Sensorëve</h3>
-                    <canvas id="trendChart"></canvas>
+        <main class="dashboard-content">
+            <div class="filter-controls">
+                <h3>🔍 Filtro Statistikat</h3>
+                <div class="filter-grid">
+                    <div class="form-group">
+                        <label for="statsHours">Orët:</label>
+                        <input type="number" id="statsHours" value="24" min="1" max="168" aria-label="Hours filter">
+                    </div>
+                    <div class="form-group">
+                        <label for="statsSensorType">Lloji i Sensorit:</label>
+                        <select id="statsSensorType" aria-label="Sensor type filter">
+                            <option value="">Të gjitha</option>
+                            <option value="voltage">Voltage</option>
+                            <option value="current">Current</option>
+                            <option value="power">Power</option>
+                            <option value="frequency">Frequency</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: flex-end;">
+                        <button class="btn" onclick="loadDetailedStats()" aria-label="Load statistics">Shiko Statistikat</button>
+                    </div>
                 </div>
             </div>
-        </div>
+
+            <div class="stats-grid" id="detailedStats" role="region" aria-label="Detailed statistics">
+                <div class="stat-card">
+                    <div class="label">Duke ngarkuar...</div>
+                    <div class="value">-</div>
+                </div>
+            </div>
+
+            <div class="chart-section">
+                <article class="card" aria-labelledby="trend-heading">
+                    <h3 id="trend-heading">📈 Trendet e Sensorëve</h3>
+                    <div class="chart-container">
+                        <canvas id="trendChart" aria-label="Sensor trends chart"></canvas>
+                    </div>
+                </article>
+            </div>
+        </main>
     </div>
-    <script src="/static/dashboard.js"></script>
+    
+    <script>
+        let authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+        let trendChart = null;
+        let refreshInterval = null;
+
+        // Check authentication
+        if (!authToken) {
+            window.location.href = '/';
+        }
+
+        async function loadDetailedStats() {
+            const hours = document.getElementById('statsHours').value;
+            const sensorType = document.getElementById('statsSensorType').value;
+            
+            try {
+                let url = `/api/sensor-stats?hours=${hours}`;
+                if (sensorType) {
+                    url += `&sensor_type=${sensorType}`;
+                }
+                
+                const response = await fetch(url, {
+                    headers: {'Authorization': `Bearer ${authToken}`},
+                    credentials: 'include'
+                });
+                
+                if (response.status === 401) {
+                    window.location.href = '/';
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    updateDetailedStats(data.data);
+                    updateTrendChart(data.data);
+                } else {
+                    console.error('Error loading stats:', data.error);
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        function updateDetailedStats(stats) {
+            const container = document.getElementById('detailedStats');
+            
+            if (!stats || stats.length === 0) {
+                container.innerHTML = `
+                    <div class="stat-card">
+                        <div class="label">Nuk ka të dhëna</div>
+                        <div class="value">-</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const totalSensors = new Set(stats.map(s => s.sensor_id)).size;
+            const totalReadings = stats.reduce((sum, s) => sum + parseInt(s.count || 0), 0);
+            const avgValue = stats.reduce((sum, s) => sum + parseFloat(s.avg_value || 0), 0) / stats.length;
+            const maxValue = Math.max(...stats.map(s => parseFloat(s.max_value || 0)));
+            const minValue = Math.min(...stats.map(s => parseFloat(s.min_value || 0)));
+            
+            container.innerHTML = `
+                <div class="stat-card">
+                    <div class="label">Sensorë Aktivë</div>
+                    <div class="value">${totalSensors}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Lexime Totale</div>
+                    <div class="value">${totalReadings}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Mesatarja</div>
+                    <div class="value">${avgValue.toFixed(2)}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Maksimumi</div>
+                    <div class="value">${maxValue.toFixed(2)}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Minimumi</div>
+                    <div class="value">${minValue.toFixed(2)}</div>
+                </div>
+            `;
+        }
+
+        function updateTrendChart(stats) {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            
+            if (trendChart) {
+                trendChart.destroy();
+            }
+            
+            if (!stats || stats.length === 0) {
+                return;
+            }
+            
+            // Group by sensor type
+            const byType = {};
+            stats.forEach(stat => {
+                if (!byType[stat.sensor_type]) {
+                    byType[stat.sensor_type] = [];
+                }
+                byType[stat.sensor_type].push(stat);
+            });
+            
+            const types = Object.keys(byType);
+            const datasets = types.map((type, index) => {
+                const colors = [
+                    'rgba(102, 126, 234, 0.8)',
+                    'rgba(118, 75, 162, 0.8)',
+                    'rgba(255, 99, 132, 0.8)',
+                    'rgba(54, 162, 235, 0.8)'
+                ];
+                return {
+                    label: type,
+                    data: byType[type].map(s => parseFloat(s.avg_value || 0)),
+                    borderColor: colors[index % colors.length],
+                    backgroundColor: colors[index % colors.length].replace('0.8', '0.2'),
+                    tension: 0.4,
+                    fill: false
+                };
+            });
+            
+            trendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: stats.map((s, i) => `Reading ${i + 1}`),
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Vlera'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Auto-load on page load
+        window.addEventListener('load', () => {
+            if (authToken) {
+                loadDetailedStats();
+                
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                }
+                
+                refreshInterval = setInterval(() => {
+                    loadDetailedStats();
+                }, 30000);
+            } else {
+                window.location.href = '/';
+            }
+        });
+
+        // Cleanup
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
 </body>
 </html>
-
