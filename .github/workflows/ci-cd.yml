@@ -254,9 +254,7 @@ jobs:
       env:
         KUBECONFIG: ${{ github.workspace }}/kubeconfig
       run: |
-        set -e  # Exit on error (but we'll handle gracefully)
         echo "=== Deploy në Kubernetes ==="
-        echo "Step: Deploy në Kubernetes"
         echo "KUBECONFIG path: $KUBECONFIG"
         
         # CRITICAL CHECK: Verify KUBECONFIG file exists
@@ -267,17 +265,15 @@ jobs:
         fi
         
         echo "✅ KUBECONFIG file found"
-        echo "Using KUBECONFIG: $KUBECONFIG"
         
         # Export KUBECONFIG to environment (critical for kubectl to use it)
         export KUBECONFIG="$KUBECONFIG"
-        echo "KUBECONFIG exported to environment"
+        echo "KUBECONFIG exported: $KUBECONFIG"
         
         # Verify cluster connection
         echo "Testing cluster connection..."
         if ! kubectl cluster-info > /dev/null 2>&1; then
           echo "⚠️ WARNING: Cannot connect to cluster. Skipping deployment."
-          echo "This is OK if cluster is not available or KUBECONFIG is invalid."
           exit 0
         fi
         echo "✅ Cluster connection verified"
@@ -286,20 +282,16 @@ jobs:
         # Without this flag, kubectl tries to download OpenAPI schema from localhost:8080
         # which causes "connection refused" errors when no cluster is available
         echo ""
-        echo "=== DEPLOYING WITH --validate=false ==="
-        echo "Command: kubectl apply --validate=false -f SmartGrid_Project_Devops/kubernetes/ -n smartgrid"
+        echo "=== DEPLOYING WITH --validate=false FLAG ==="
+        echo "This flag prevents OpenAPI validation that requires cluster connection"
         echo ""
         
-        # Run deployment with --validate=false flag
-        if kubectl apply --validate=false -f SmartGrid_Project_Devops/kubernetes/ -n smartgrid; then
-          echo ""
-          echo "✅ Deployment completed successfully"
-        else
-          echo ""
-          echo "⚠️ WARNING: Deployment command returned non-zero exit code"
-          echo "This may be expected if cluster resources are not available."
-          exit 0  # Don't fail the workflow
-        fi
+        # THE FIX: Always use --validate=false flag
+        # This is the ONLY way to prevent the "connection refused" error
+        kubectl apply --validate=false -f SmartGrid_Project_Devops/kubernetes/ -n smartgrid
+        
+        echo ""
+        echo "✅ Deployment completed successfully"
     
     - name: Verify deployment
       if: secrets.KUBECONFIG != ''
