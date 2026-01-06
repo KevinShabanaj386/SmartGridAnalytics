@@ -136,6 +136,39 @@ Ky projekt përmbush kërkesat teknike për implementimin e projekteve në Siste
 ✅ CI/CD ready (Kubernetes manifests)
 ✅ Auto-scaling dhe auto-healing
 
+## 📋 Ndryshimet e Fundit - Çfarë Është Shtuar dhe Edituar
+
+### 📁 File-a të Reja të Shtuara
+
+**Consul Service Discovery:**
+- ✨ `docker/api_gateway/consul_client.py` - Klienti i ri Consul për service discovery me fallback
+
+**Schema Registry Integration:**
+- ✨ `docker/data-ingestion-service/schema_registry_client.py` - Klienti i ri Schema Registry me Avro support
+- ✨ `schemas/avro/sensor_data.avsc` - Avro schema definition për sensor data
+
+**Helm Charts:**
+- ✨ `kubernetes/helm/smartgrid/Chart.yaml` - Helm chart metadata
+- ✨ `kubernetes/helm/smartgrid/values.yaml` - Default values për konfigurim
+- ✨ `kubernetes/helm/smartgrid/templates/_helpers.tpl` - Helper templates
+- ✨ `kubernetes/helm/smartgrid/templates/api-gateway-deployment.yaml` - Deployment template
+- ✨ `kubernetes/helm/smartgrid/templates/configmap.yaml` - ConfigMap template
+- ✨ `kubernetes/helm/smartgrid/templates/hpa.yaml` - HorizontalPodAutoscaler template
+- ✨ `kubernetes/helm/smartgrid/README.md` - Dokumentim për Helm chart
+
+### ✏️ File-a Ekzistuese të Edituara
+
+**API Gateway:**
+- 📝 `docker/api_gateway/app.py` - Shtuar integrimi i Consul për service discovery, zëvendësuar hardcoded URLs
+- 📝 `docker/api_gateway/requirements.txt` - Shtuar `consul==1.1.0`
+
+**Data Ingestion Service:**
+- 📝 `docker/data-ingestion-service/app.py` - Shtuar service registration me Consul dhe integrimi i Schema Registry me Avro
+- 📝 `docker/data-ingestion-service/requirements.txt` - Shtuar `consul==1.1.0` dhe `confluent-kafka[avro]==2.3.0`
+
+**Dokumentim:**
+- 📝 `README.md` - Përditësuar me seksione të reja për Consul, Schema Registry, dhe Helm Charts
+
 ## 🆕 Përditësimet e Fundit
 
 ### ✅ Consul Service Discovery - IMPLEMENTUAR
