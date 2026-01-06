@@ -187,16 +187,28 @@ jobs:
           echo "✅ Dockerfile found"
         fi
     
-    - name: Build and push Docker image
+    - name: Build Docker image
       uses: docker/build-push-action@v5
+      id: build
       with:
         context: SmartGrid_Project_Devops/docker/${{ matrix.service }}
-        push: ${{ github.event_name != 'pull_request' }}
+        push: false
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+    
+    - name: Push Docker image (optional)
+      if: github.event_name != 'pull_request'
       continue-on-error: true
+      uses: docker/build-push-action@v5
+      with:
+        context: SmartGrid_Project_Devops/docker/${{ matrix.service }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
   # Job për deployment në Kubernetes (nëse është main branch)
   deploy:
