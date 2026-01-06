@@ -125,7 +125,7 @@ jobs:
     strategy:
       matrix:
         service:
-          - api-gateway
+          - api_gateway
           - data-ingestion-service
           - data-processing-service
           - analytics-service
