@@ -13,6 +13,8 @@ import secrets
 import jwt
 from functools import wraps
 import urllib.parse
+import signal
+import sys
 
 # Import OAuth2 module
 try:
@@ -534,8 +536,74 @@ if OAUTH2_AVAILABLE:
             logger.error(f"Error in OAuth2 userinfo: {str(e)}")
             return jsonify({'error': 'Internal server error'}), 500
 
+# Consul service registration
+_consul_service_id = None
+
+def register_with_consul():
+    """Register this service with Consul"""
+    global _consul_service_id
+    try:
+        import consul
+        consul_host = os.getenv('CONSUL_HOST', 'smartgrid-consul')
+        consul_port = int(os.getenv('CONSUL_PORT', '8500'))
+        use_consul = os.getenv('USE_CONSUL', 'true').lower() == 'true'
+        
+        if not use_consul:
+            logger.info("Consul registration disabled (USE_CONSUL=false)")
+            return
+        
+        client = consul.Consul(host=consul_host, port=consul_port)
+        
+        # Register service
+        service_id = f"user-management-{os.getenv('HOSTNAME', 'default')}"
+        service_name = "user-management"
+        service_address = os.getenv('SERVICE_ADDRESS', 'smartgrid-user-management')
+        service_port = 5004
+        
+        client.agent.service.register(
+            name=service_name,
+            service_id=service_id,
+            address=service_address,
+            port=service_port,
+            check=consul.Check.http(
+                f'http://{service_address}:{service_port}/health',
+                interval='10s'
+            )
+        )
+        _consul_service_id = service_id
+        logger.info(f"Registered with Consul as {service_name} ({service_id})")
+    except ImportError:
+        logger.warning("python-consul2 not installed, skipping Consul registration")
+    except Exception as e:
+        logger.warning(f"Could not register with Consul: {e}")
+
+def deregister_from_consul():
+    """Deregister this service from Consul"""
+    global _consul_service_id
+    if _consul_service_id:
+        try:
+            import consul
+            consul_host = os.getenv('CONSUL_HOST', 'smartgrid-consul')
+            consul_port = int(os.getenv('CONSUL_PORT', '8500'))
+            client = consul.Consul(host=consul_host, port=consul_port)
+            client.agent.service.deregister(_consul_service_id)
+            logger.info(f"Deregistered from Consul: {_consul_service_id}")
+        except Exception as e:
+            logger.warning(f"Could not deregister from Consul: {e}")
+
+def signal_handler(sig, frame):
+    """Handle shutdown signals"""
+    logger.info("Received shutdown signal, deregistering from Consul...")
+    deregister_from_consul()
+    sys.exit(0)
+
 if __name__ == '__main__':
     logger.info("Initializing User Management Service...")
+    
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     init_database()
     
     # Initialize audit logs table
@@ -545,6 +613,9 @@ if __name__ == '__main__':
             logger.info("Audit logs table initialized")
         except Exception as e:
             logger.warning(f"Could not initialize audit logs: {e}")
+    
+    # Register with Consul
+    register_with_consul()
     
     logger.info("Starting User Management Service on port 5004")
     app.run(host='0.0.0.0', port=5004, debug=False)

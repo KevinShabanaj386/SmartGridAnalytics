@@ -9,6 +9,8 @@ from pyspark.sql.types import *
 import os
 import logging
 from datetime import datetime
+import signal
+import sys
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -334,6 +336,76 @@ def main():
         spark.stop()
         logger.info("Spark session stopped")
 
+# Consul service registration
+_consul_service_id = None
+
+def register_with_consul():
+    """Register this service with Consul"""
+    global _consul_service_id
+    try:
+        import consul
+        consul_host = os.getenv('CONSUL_HOST', 'smartgrid-consul')
+        consul_port = int(os.getenv('CONSUL_PORT', '8500'))
+        use_consul = os.getenv('USE_CONSUL', 'true').lower() == 'true'
+        
+        if not use_consul:
+            logger.info("Consul registration disabled (USE_CONSUL=false)")
+            return
+        
+        client = consul.Consul(host=consul_host, port=consul_port)
+        
+        # Register service
+        service_id = f"spark-streaming-{os.getenv('HOSTNAME', 'default')}"
+        service_name = "spark-streaming"
+        service_address = os.getenv('SERVICE_ADDRESS', 'smartgrid-spark-streaming')
+        service_port = int(os.getenv('SERVICE_PORT', '4040'))  # Spark UI port
+        
+        # For Spark streaming service, use a script-based health check
+        # that checks if the Spark process is running
+        client.agent.service.register(
+            name=service_name,
+            service_id=service_id,
+            address=service_address,
+            port=service_port,
+            check=consul.Check.script(
+                'pgrep -f "spark.*spark_consumer.py" || exit 1',
+                interval='30s'
+            )
+        )
+        _consul_service_id = service_id
+        logger.info(f"Registered with Consul as {service_name} ({service_id})")
+    except ImportError:
+        logger.warning("python-consul2 not installed, skipping Consul registration")
+    except Exception as e:
+        logger.warning(f"Could not register with Consul: {e}")
+
+def deregister_from_consul():
+    """Deregister this service from Consul"""
+    global _consul_service_id
+    if _consul_service_id:
+        try:
+            import consul
+            consul_host = os.getenv('CONSUL_HOST', 'smartgrid-consul')
+            consul_port = int(os.getenv('CONSUL_PORT', '8500'))
+            client = consul.Consul(host=consul_host, port=consul_port)
+            client.agent.service.deregister(_consul_service_id)
+            logger.info(f"Deregistered from Consul: {_consul_service_id}")
+        except Exception as e:
+            logger.warning(f"Could not deregister from Consul: {e}")
+
+def signal_handler(sig, frame):
+    """Handle shutdown signals"""
+    logger.info("Received shutdown signal, deregistering from Consul...")
+    deregister_from_consul()
+    sys.exit(0)
+
 if __name__ == "__main__":
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Register with Consul
+    register_with_consul()
+    
     main()
 

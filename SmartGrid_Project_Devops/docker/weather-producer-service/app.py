@@ -12,6 +12,8 @@ import time
 import random
 from datetime import datetime
 from threading import Thread
+import signal
+import sys
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -162,12 +164,81 @@ def generate_weather():
             'error': str(e)
         }), 500
 
+# Consul service registration
+_consul_service_id = None
+
+def register_with_consul():
+    """Register this service with Consul"""
+    global _consul_service_id
+    try:
+        import consul
+        consul_host = os.getenv('CONSUL_HOST', 'smartgrid-consul')
+        consul_port = int(os.getenv('CONSUL_PORT', '8500'))
+        use_consul = os.getenv('USE_CONSUL', 'true').lower() == 'true'
+        
+        if not use_consul:
+            logger.info("Consul registration disabled (USE_CONSUL=false)")
+            return
+        
+        client = consul.Consul(host=consul_host, port=consul_port)
+        
+        # Register service
+        service_id = f"weather-producer-{os.getenv('HOSTNAME', 'default')}"
+        service_name = "weather-producer"
+        service_address = os.getenv('SERVICE_ADDRESS', 'smartgrid-weather-producer')
+        service_port = 5006
+        
+        client.agent.service.register(
+            name=service_name,
+            service_id=service_id,
+            address=service_address,
+            port=service_port,
+            check=consul.Check.http(
+                f'http://{service_address}:{service_port}/health',
+                interval='10s'
+            )
+        )
+        _consul_service_id = service_id
+        logger.info(f"Registered with Consul as {service_name} ({service_id})")
+    except ImportError:
+        logger.warning("python-consul2 not installed, skipping Consul registration")
+    except Exception as e:
+        logger.warning(f"Could not register with Consul: {e}")
+
+def deregister_from_consul():
+    """Deregister this service from Consul"""
+    global _consul_service_id
+    if _consul_service_id:
+        try:
+            import consul
+            consul_host = os.getenv('CONSUL_HOST', 'smartgrid-consul')
+            consul_port = int(os.getenv('CONSUL_PORT', '8500'))
+            client = consul.Consul(host=consul_host, port=consul_port)
+            client.agent.service.deregister(_consul_service_id)
+            logger.info(f"Deregistered from Consul: {_consul_service_id}")
+        except Exception as e:
+            logger.warning(f"Could not deregister from Consul: {e}")
+
+def signal_handler(sig, frame):
+    """Handle shutdown signals"""
+    logger.info("Received shutdown signal, deregistering from Consul...")
+    deregister_from_consul()
+    sys.exit(0)
+
 if __name__ == '__main__':
+    logger.info("Starting Weather Producer Service on port 5006")
+    
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Register with Consul
+    register_with_consul()
+    
     # Start weather producer në thread të veçantë
     producer_thread = Thread(target=weather_producer_loop, daemon=True)
     producer_thread.start()
     
-    logger.info("Weather Producer Service started")
     logger.info(f"Kafka Broker: {KAFKA_BROKER}")
     logger.info(f"Kafka Topic: {KAFKA_TOPIC_WEATHER}")
     logger.info(f"Update Interval: {WEATHER_UPDATE_INTERVAL} seconds")

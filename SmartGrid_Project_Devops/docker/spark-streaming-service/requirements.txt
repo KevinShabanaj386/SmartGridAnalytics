@@ -1,4 +1,5 @@
 pyspark==3.5.0
 kafka-python==2.0.2
 psycopg2-binary==2.9.9
+python-consul2==1.1.0
 

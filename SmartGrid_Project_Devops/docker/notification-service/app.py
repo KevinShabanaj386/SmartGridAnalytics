@@ -9,6 +9,8 @@ import logging
 from datetime import datetime
 import os
 from typing import Dict, Any
+import signal
+import sys
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -206,7 +208,76 @@ def send_critical_alert_notification(alert: Dict[str, Any]):
     except Exception as e:
         logger.error(f"Error sending critical alert notification: {str(e)}")
 
+# Consul service registration
+_consul_service_id = None
+
+def register_with_consul():
+    """Register this service with Consul"""
+    global _consul_service_id
+    try:
+        import consul
+        consul_host = os.getenv('CONSUL_HOST', 'smartgrid-consul')
+        consul_port = int(os.getenv('CONSUL_PORT', '8500'))
+        use_consul = os.getenv('USE_CONSUL', 'true').lower() == 'true'
+        
+        if not use_consul:
+            logger.info("Consul registration disabled (USE_CONSUL=false)")
+            return
+        
+        client = consul.Consul(host=consul_host, port=consul_port)
+        
+        # Register service
+        service_id = f"notification-{os.getenv('HOSTNAME', 'default')}"
+        service_name = "notification"
+        service_address = os.getenv('SERVICE_ADDRESS', 'smartgrid-notification')
+        service_port = 5003
+        
+        client.agent.service.register(
+            name=service_name,
+            service_id=service_id,
+            address=service_address,
+            port=service_port,
+            check=consul.Check.http(
+                f'http://{service_address}:{service_port}/health',
+                interval='10s'
+            )
+        )
+        _consul_service_id = service_id
+        logger.info(f"Registered with Consul as {service_name} ({service_id})")
+    except ImportError:
+        logger.warning("python-consul2 not installed, skipping Consul registration")
+    except Exception as e:
+        logger.warning(f"Could not register with Consul: {e}")
+
+def deregister_from_consul():
+    """Deregister this service from Consul"""
+    global _consul_service_id
+    if _consul_service_id:
+        try:
+            import consul
+            consul_host = os.getenv('CONSUL_HOST', 'smartgrid-consul')
+            consul_port = int(os.getenv('CONSUL_PORT', '8500'))
+            client = consul.Consul(host=consul_host, port=consul_port)
+            client.agent.service.deregister(_consul_service_id)
+            logger.info(f"Deregistered from Consul: {_consul_service_id}")
+        except Exception as e:
+            logger.warning(f"Could not deregister from Consul: {e}")
+
+def signal_handler(sig, frame):
+    """Handle shutdown signals"""
+    logger.info("Received shutdown signal, deregistering from Consul...")
+    deregister_from_consul()
+    sys.exit(0)
+
 if __name__ == '__main__':
     logger.info("Starting Notification Service on port 5003")
+    
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Register with Consul
+    register_with_consul()
+    
     app.run(host='0.0.0.0', port=5003, debug=False)
 
