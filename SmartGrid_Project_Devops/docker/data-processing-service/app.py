@@ -12,6 +12,8 @@ from psycopg2.extras import execute_values
 from psycopg2.pool import SimpleConnectionPool
 from typing import Dict, Any, List
 import time
+import signal
+import sys
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -446,8 +448,78 @@ def consume_meter_readings():
     finally:
         consumer.close()
 
+# Consul service registration
+_consul_service_id = None
+
+def register_with_consul():
+    """Register this service with Consul"""
+    global _consul_service_id
+    try:
+        import consul
+        consul_host = os.getenv('CONSUL_HOST', 'smartgrid-consul')
+        consul_port = int(os.getenv('CONSUL_PORT', '8500'))
+        use_consul = os.getenv('USE_CONSUL', 'true').lower() == 'true'
+        
+        if not use_consul:
+            logger.info("Consul registration disabled (USE_CONSUL=false)")
+            return
+        
+        client = consul.Consul(host=consul_host, port=consul_port)
+        
+        # Register service
+        service_id = f"data-processing-{os.getenv('HOSTNAME', 'default')}"
+        service_name = "data-processing"
+        service_address = os.getenv('SERVICE_ADDRESS', 'smartgrid-data-processing')
+        service_port = int(os.getenv('SERVICE_PORT', '5001'))
+        
+        # For non-HTTP services, use a script-based health check
+        # that checks if the process is running
+        client.agent.service.register(
+            name=service_name,
+            service_id=service_id,
+            address=service_address,
+            port=service_port,
+            check=consul.Check.script(
+                'pgrep -f "python.*app.py" || exit 1',
+                interval='30s'
+            )
+        )
+        _consul_service_id = service_id
+        logger.info(f"Registered with Consul as {service_name} ({service_id})")
+    except ImportError:
+        logger.warning("python-consul2 not installed, skipping Consul registration")
+    except Exception as e:
+        logger.warning(f"Could not register with Consul: {e}")
+
+def deregister_from_consul():
+    """Deregister this service from Consul"""
+    global _consul_service_id
+    if _consul_service_id:
+        try:
+            import consul
+            consul_host = os.getenv('CONSUL_HOST', 'smartgrid-consul')
+            consul_port = int(os.getenv('CONSUL_PORT', '8500'))
+            client = consul.Consul(host=consul_host, port=consul_port)
+            client.agent.service.deregister(_consul_service_id)
+            logger.info(f"Deregistered from Consul: {_consul_service_id}")
+        except Exception as e:
+            logger.warning(f"Could not deregister from Consul: {e}")
+
+def signal_handler(sig, frame):
+    """Handle shutdown signals"""
+    logger.info("Received shutdown signal, deregistering from Consul...")
+    deregister_from_consul()
+    sys.exit(0)
+
 if __name__ == '__main__':
     logger.info("Starting Data Processing Service")
+    
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Register with Consul
+    register_with_consul()
     
     # Inicializimi i database pool
     init_db_pool()
@@ -461,11 +533,16 @@ if __name__ == '__main__':
     sensor_thread.start()
     meter_thread.start()
     
-    # Batch processing për agregatat çdo 5 minuta
-    while True:
-        time.sleep(300)  # 5 minuta
-        try:
-            calculate_aggregates()
-        except Exception as e:
-            logger.error(f"Error in batch processing: {str(e)}")
+    try:
+        # Batch processing për agregatat çdo 5 minuta
+        while True:
+            time.sleep(300)  # 5 minuta
+            try:
+                calculate_aggregates()
+            except Exception as e:
+                logger.error(f"Error in batch processing: {str(e)}")
+    except KeyboardInterrupt:
+        logger.info("Stopping service...")
+    finally:
+        deregister_from_consul()
 
