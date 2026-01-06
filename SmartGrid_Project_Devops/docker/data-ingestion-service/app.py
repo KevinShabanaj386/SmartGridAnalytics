@@ -19,15 +19,22 @@ KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092')
 KAFKA_TOPIC_SENSOR_DATA = os.getenv('KAFKA_TOPIC_SENSOR_DATA', 'smartgrid-sensor-data')
 KAFKA_TOPIC_METER_READINGS = os.getenv('KAFKA_TOPIC_METER_READINGS', 'smartgrid-meter-readings')
 
-# Kafka Producer me konfigurim për resiliency
-producer = KafkaProducer(
-    bootstrap_servers=[KAFKA_BROKER],
-    value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-    key_serializer=lambda k: k.encode('utf-8') if k else None,
-    acks='all',  # Garantim që mesazhi është ruajtur
-    retries=3,  # Retry në rast dështimi
-    max_in_flight_requests_per_connection=1
-)
+# Kafka Producer - lazy initialization për të shmangur lidhjen në import time
+_producer = None
+
+def get_producer():
+    """Kthen Kafka producer, duke e krijuar nëse nuk ekziston (lazy initialization)"""
+    global _producer
+    if _producer is None:
+        _producer = KafkaProducer(
+            bootstrap_servers=[KAFKA_BROKER],
+            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+            key_serializer=lambda k: k.encode('utf-8') if k else None,
+            acks='all',  # Garantim që mesazhi është ruajtur
+            retries=3,  # Retry në rast dështimi
+            max_in_flight_requests_per_connection=1
+        )
+    return _producer
 
 def create_sensor_event(sensor_id: str, sensor_type: str, value: float, 
                        location: Dict[str, float], metadata: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -82,6 +89,7 @@ def ingest_sensor_data():
         )
         
         # Dërgimi në Kafka
+        producer = get_producer()
         future = producer.send(
             KAFKA_TOPIC_SENSOR_DATA,
             key=data['sensor_id'],
@@ -134,6 +142,7 @@ def ingest_meter_reading():
             'unit': data.get('unit', 'kWh')
         }
         
+        producer = get_producer()
         future = producer.send(
             KAFKA_TOPIC_METER_READINGS,
             key=data['meter_id'],

@@ -19,13 +19,20 @@ KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092')
 KAFKA_TOPIC_ALERTS = os.getenv('KAFKA_TOPIC_ALERTS', 'smartgrid-alerts')
 KAFKA_TOPIC_NOTIFICATIONS = os.getenv('KAFKA_TOPIC_NOTIFICATIONS', 'smartgrid-notifications')
 
-# Kafka Producer për dërgimin e njoftimeve
-producer = KafkaProducer(
-    bootstrap_servers=[KAFKA_BROKER],
-    value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-    acks='all',
-    retries=3
-)
+# Kafka Producer - lazy initialization për të shmangur lidhjen në import time
+_producer = None
+
+def get_producer():
+    """Kthen Kafka producer, duke e krijuar nëse nuk ekziston (lazy initialization)"""
+    global _producer
+    if _producer is None:
+        _producer = KafkaProducer(
+            bootstrap_servers=[KAFKA_BROKER],
+            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+            acks='all',
+            retries=3
+        )
+    return _producer
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -86,6 +93,7 @@ def send_notification():
             logger.info(f"Webhook notification sent to {notification['recipient']}")
         
         # Dërgo në Kafka për audit
+        producer = get_producer()
         future = producer.send(
             KAFKA_TOPIC_NOTIFICATIONS,
             value=notification
@@ -134,6 +142,7 @@ def create_alert():
         }
         
         # Dërgo në Kafka për procesim
+        producer = get_producer()
         future = producer.send(
             KAFKA_TOPIC_ALERTS,
             key=alert['alert_id'],
@@ -168,6 +177,7 @@ def send_critical_alert_notification(alert: Dict[str, Any]):
             'alert_id': alert['alert_id']
         }
         
+        producer = get_producer()
         future = producer.send(
             KAFKA_TOPIC_NOTIFICATIONS,
             value=notification

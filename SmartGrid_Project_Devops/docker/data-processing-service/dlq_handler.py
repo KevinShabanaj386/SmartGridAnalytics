@@ -17,12 +17,19 @@ KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092')
 DLQ_TOPIC = os.getenv('DLQ_TOPIC', 'smartgrid-dlq')
 MAX_RETRIES = int(os.getenv('MAX_RETRIES', '3'))
 
-# Kafka Producer për DLQ
-dlq_producer = KafkaProducer(
-    bootstrap_servers=[KAFKA_BROKER],
-    value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-    acks='all'
-)
+# Kafka Producer për DLQ - lazy initialization për të shmangur lidhjen në import time
+_dlq_producer = None
+
+def get_dlq_producer():
+    """Kthen Kafka producer për DLQ, duke e krijuar nëse nuk ekziston (lazy initialization)"""
+    global _dlq_producer
+    if _dlq_producer is None:
+        _dlq_producer = KafkaProducer(
+            bootstrap_servers=[KAFKA_BROKER],
+            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+            acks='all'
+        )
+    return _dlq_producer
 
 def send_to_dlq(
     original_topic: str,
@@ -44,7 +51,8 @@ def send_to_dlq(
     }
     
     try:
-        future = dlq_producer.send(
+        producer = get_dlq_producer()
+        future = producer.send(
             DLQ_TOPIC,
             key=message.get('event_id', 'unknown'),
             value=dlq_message

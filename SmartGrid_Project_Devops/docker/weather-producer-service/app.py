@@ -22,14 +22,21 @@ KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'smartgrid-kafka:9092')
 KAFKA_TOPIC_WEATHER = os.getenv('KAFKA_TOPIC_WEATHER', 'smartgrid-weather-data')
 WEATHER_UPDATE_INTERVAL = int(os.getenv('WEATHER_UPDATE_INTERVAL', 60))  # sekonda
 
-# Kafka Producer
-producer = KafkaProducer(
-    bootstrap_servers=[KAFKA_BROKER],
-    value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-    key_serializer=lambda k: k.encode('utf-8') if k else None,
-    acks='all',
-    retries=3
-)
+# Kafka Producer - lazy initialization për të shmangur lidhjen në import time
+_producer = None
+
+def get_producer():
+    """Kthen Kafka producer, duke e krijuar nëse nuk ekziston (lazy initialization)"""
+    global _producer
+    if _producer is None:
+        _producer = KafkaProducer(
+            bootstrap_servers=[KAFKA_BROKER],
+            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+            key_serializer=lambda k: k.encode('utf-8') if k else None,
+            acks='all',
+            retries=3
+        )
+    return _producer
 
 # Simulim i të dhënave të motit (në prodhim, do të merrte nga API real)
 WEATHER_CONDITIONS = ['Sunny', 'Cloudy', 'Rainy', 'Windy', 'Foggy', 'Stormy']
@@ -61,6 +68,7 @@ def weather_producer_loop():
             weather_data = generate_weather_data()
             
             # Dërgo në Kafka
+            producer = get_producer()
             future = producer.send(
                 KAFKA_TOPIC_WEATHER,
                 key='weather',
@@ -100,6 +108,7 @@ def generate_weather():
     try:
         weather_data = generate_weather_data()
         
+        producer = get_producer()
         future = producer.send(
             KAFKA_TOPIC_WEATHER,
             key='weather',
