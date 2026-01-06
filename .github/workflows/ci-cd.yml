@@ -164,15 +164,27 @@ jobs:
     - name: Verify build context exists
       run: |
         BUILD_CONTEXT="SmartGrid_Project_Devops/docker/${{ matrix.service }}"
+        echo "Checking for build context: $BUILD_CONTEXT"
         if [ ! -d "$BUILD_CONTEXT" ]; then
           echo "❌ Error: Build context directory '$BUILD_CONTEXT' does not exist!"
-          echo "Available directories:"
-          ls -la SmartGrid_Project_Devops/docker/ | grep "^d" | awk '{print $NF}'
+          echo ""
+          echo "Current working directory: $(pwd)"
+          echo "Repository contents:"
+          ls -la SmartGrid_Project_Devops/docker/ | head -20
+          echo ""
+          echo "Available service directories:"
+          ls -d SmartGrid_Project_Devops/docker/*/ 2>/dev/null | sed 's|SmartGrid_Project_Devops/docker/||' | sed 's|/||' || echo "None found"
           exit 1
         fi
         echo "✅ Build context '$BUILD_CONTEXT' exists"
+        echo "Contents of $BUILD_CONTEXT:"
+        ls -la "$BUILD_CONTEXT" || echo "Could not list contents"
         if [ ! -f "$BUILD_CONTEXT/Dockerfile" ] && [ ! -f "$BUILD_CONTEXT/dockerfile" ]; then
           echo "⚠️ Warning: No Dockerfile found in $BUILD_CONTEXT"
+          echo "Looking for Dockerfile variants..."
+          find "$BUILD_CONTEXT" -iname "*dockerfile*" -o -iname "Dockerfile*" 2>/dev/null || echo "No Dockerfile variants found"
+        else
+          echo "✅ Dockerfile found"
         fi
     
     - name: Build and push Docker image
