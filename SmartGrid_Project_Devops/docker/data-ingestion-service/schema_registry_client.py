@@ -27,10 +27,23 @@ def get_avro_producer():
             from confluent_kafka.avro import AvroProducer
             from confluent_kafka import avro
             
-            # Load schema
-            schema_path = os.path.join(os.path.dirname(__file__), '../../schemas/avro/sensor_data.avsc')
-            if not os.path.exists(schema_path):
-                logger.warning(f"Schema file not found at {schema_path}, falling back to JSON")
+            # Load schema - try multiple paths
+            base_dir = os.path.dirname(__file__)
+            possible_paths = [
+                os.path.join(base_dir, '../../schemas/avro/sensor_data.avsc'),
+                os.path.join(base_dir, '../../../schemas/avro/sensor_data.avsc'),
+                '/app/schemas/avro/sensor_data.avsc',
+                'schemas/avro/sensor_data.avsc'
+            ]
+            
+            schema_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    schema_path = path
+                    break
+            
+            if not schema_path:
+                logger.warning(f"Schema file not found, tried: {possible_paths}, falling back to JSON")
                 return None
             
             value_schema = avro.loads(open(schema_path).read())
