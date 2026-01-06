@@ -261,15 +261,17 @@ jobs:
           exit 0
         fi
         echo "Using KUBECONFIG: $KUBECONFIG"
+        # Export KUBECONFIG to environment
+        export KUBECONFIG="$KUBECONFIG"
         # First verify we can connect to the cluster
-        kubectl --kubeconfig="$KUBECONFIG" cluster-info || {
+        kubectl cluster-info || {
           echo "⚠️ Warning: Cannot connect to cluster. Skipping deployment."
           exit 0
         }
         echo "✅ Cluster connection verified"
         # Deploy with validation disabled to avoid OpenAPI schema download errors
-        # Using explicit --kubeconfig to ensure we use the correct config
-        kubectl --kubeconfig="$KUBECONFIG" apply --validate=false -f SmartGrid_Project_Devops/kubernetes/ -n smartgrid || {
+        # CRITICAL: --validate=false prevents OpenAPI validation that requires cluster connection
+        kubectl apply --validate=false -f SmartGrid_Project_Devops/kubernetes/ -n smartgrid || {
           echo "⚠️ Warning: Deployment failed. This may be expected if cluster is not available."
           exit 0
         }
