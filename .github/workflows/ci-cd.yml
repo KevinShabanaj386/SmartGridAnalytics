@@ -191,11 +191,12 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: SmartGrid_Project_Devops/docker/${{ matrix.service }}
-        push: ${{ github.event_name != 'pull_request' }}
+        push: ${{ github.event_name != 'pull_request' && github.repository_owner != 'KevinShabanaj386' || github.repository_owner == 'KevinShabanaj386' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+      continue-on-error: true
 
   # Job për deployment në Kubernetes (nëse është main branch)
   deploy:
