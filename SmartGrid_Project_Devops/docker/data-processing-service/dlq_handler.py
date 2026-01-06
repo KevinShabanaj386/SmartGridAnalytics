@@ -24,11 +24,17 @@ def get_dlq_producer():
     """Kthen Kafka producer për DLQ, duke e krijuar nëse nuk ekziston (lazy initialization)"""
     global _dlq_producer
     if _dlq_producer is None:
-        _dlq_producer = KafkaProducer(
-            bootstrap_servers=[KAFKA_BROKER],
-            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-            acks='all'
-        )
+        try:
+            _dlq_producer = KafkaProducer(
+                bootstrap_servers=[KAFKA_BROKER],
+                value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+                acks='all',
+                api_version=(0, 10, 1)  # Specify API version to avoid metadata fetch
+            )
+        except Exception as e:
+            # Në CI environment ose kur Kafka nuk është i disponueshëm
+            logger.warning(f"Could not create DLQ Kafka producer: {e}. This is OK for CI/testing.")
+            return None
     return _dlq_producer
 
 def send_to_dlq(
@@ -52,18 +58,23 @@ def send_to_dlq(
     
     try:
         producer = get_dlq_producer()
-        future = producer.send(
-            DLQ_TOPIC,
-            key=message.get('event_id', 'unknown'),
-            value=dlq_message
-        )
-        future.get(timeout=10)
-        
-        logger.error(
-            f"Message sent to DLQ: topic={original_topic}, "
-            f"event_id={message.get('event_id')}, error={error}, retries={retry_count}"
-        )
-        
+        if producer is not None:
+            try:
+                future = producer.send(
+                    DLQ_TOPIC,
+                    key=message.get('event_id', 'unknown'),
+                    value=dlq_message
+                )
+                future.get(timeout=10)
+                
+                logger.error(
+                    f"Message sent to DLQ: topic={original_topic}, "
+                    f"event_id={message.get('event_id')}, error={error}, retries={retry_count}"
+                )
+            except Exception as e:
+                logger.critical(f"Failed to send message to DLQ: {str(e)}")
+        else:
+            logger.warning(f"DLQ producer not available - message not sent to DLQ: {original_topic}")
     except Exception as e:
         logger.critical(f"Failed to send message to DLQ: {str(e)}")
 

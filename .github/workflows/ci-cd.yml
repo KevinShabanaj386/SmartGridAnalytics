@@ -49,9 +49,15 @@ jobs:
       working-directory: SmartGrid_Project_Devops/docker/data-ingestion-service
       run: |
         pip install -r requirements.txt
-        # Verify that the service code imports correctly. We avoid importing kafka directly
-        # here because kafka-python currently has compatibility issues in some environments.
-        python -c "import app; print('Data Ingestion imports OK')"
+        # Verify that the service code imports correctly without requiring Kafka
+        python -c "
+        try:
+            import app
+            print('Data Ingestion imports OK')
+        except Exception as e:
+            print(f'Import failed: {e}')
+            exit(1)
+        "
     
     - name: Test Notification Service
       working-directory: SmartGrid_Project_Devops/docker/notification-service
