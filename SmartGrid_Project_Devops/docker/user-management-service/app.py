@@ -28,13 +28,26 @@ except ImportError:
     pass
     OAUTH2_AVAILABLE = False
 
-# Import Audit Logs module
+# Import Audit Logs module (PostgreSQL)
 try:
     from audit_logs import create_audit_log, init_audit_logs_table
     AUDIT_LOGS_AVAILABLE = True
 except ImportError:
     pass
     AUDIT_LOGS_AVAILABLE = False
+
+# Import MongoDB Audit Logs module (Hybrid Storage)
+try:
+    from mongodb_audit import init_mongodb, create_audit_log_mongodb
+    MONGODB_AUDIT_AVAILABLE = init_mongodb()
+    if MONGODB_AUDIT_AVAILABLE:
+        logger.info("MongoDB audit logs enabled")
+except ImportError:
+    MONGODB_AUDIT_AVAILABLE = False
+    logger.warning("MongoDB audit logs not available")
+except Exception as e:
+    MONGODB_AUDIT_AVAILABLE = False
+    logger.warning(f"Could not initialize MongoDB audit logs: {e}")
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -281,17 +294,20 @@ def login():
         user = cursor.fetchone()
         
         if not user:
-            # Log failed login attempt
+            # Log failed login attempt - Hybrid Storage (PostgreSQL + MongoDB)
+            audit_data = {
+                'event_type': 'login_failed',
+                'action': 'login_attempt',
+                'username': data['username'],
+                'ip_address': request.remote_addr,
+                'user_agent': request.headers.get('User-Agent'),
+                'request_path': request.path,
+                'error_message': 'User not found'
+            }
             if AUDIT_LOGS_AVAILABLE:
-                create_audit_log(
-                    event_type='login_failed',
-                    action='login_attempt',
-                    username=data['username'],
-                    ip_address=request.remote_addr,
-                    user_agent=request.headers.get('User-Agent'),
-                    request_path=request.path,
-                    error_message='User not found'
-                )
+                create_audit_log(**audit_data)
+            if MONGODB_AUDIT_AVAILABLE:
+                create_audit_log_mongodb(**audit_data)
             
             cursor.close()
             conn.close()
@@ -326,19 +342,22 @@ def login():
         cursor.close()
         conn.close()
         
-        # Log successful login (Immutable Audit Logs - kërkesë e profesorit)
+        # Log successful login - Hybrid Storage (PostgreSQL + MongoDB)
+        audit_data = {
+            'event_type': 'user_login',
+            'action': 'login_success',
+            'user_id': user['id'],
+            'username': user['username'],
+            'ip_address': request.remote_addr,
+            'user_agent': request.headers.get('User-Agent'),
+            'request_method': request.method,
+            'request_path': request.path,
+            'response_status': 200
+        }
         if AUDIT_LOGS_AVAILABLE:
-            create_audit_log(
-                event_type='user_login',
-                action='login_success',
-                user_id=user['id'],
-                username=user['username'],
-                ip_address=request.remote_addr,
-                user_agent=request.headers.get('User-Agent'),
-                request_method=request.method,
-                request_path=request.path,
-                response_status=200
-            )
+            create_audit_log(**audit_data)
+        if MONGODB_AUDIT_AVAILABLE:
+            create_audit_log_mongodb(**audit_data)
         
         return jsonify({
             'status': 'success',

@@ -156,6 +156,13 @@ Ky projekt përmbush kërkesat teknike për implementimin e projekteve në Siste
 - ✨ `kubernetes/helm/smartgrid/templates/hpa.yaml` - HorizontalPodAutoscaler template
 - ✨ `kubernetes/helm/smartgrid/README.md` - Dokumentim për Helm chart
 
+**MongoDB Integration:**
+- ✨ `docker/user-management-service/mongodb_audit.py` - MongoDB client për audit logs
+
+**Dokumentim:**
+- ✨ `docs/data-modeling-erd.md` - ERD dhe data modeling documentation
+- ✨ `docs/architecture-uml.md` - UML diagrams për arkitekturë
+
 ### ✏️ File-a Ekzistuese të Edituara
 
 **API Gateway:**
@@ -166,8 +173,23 @@ Ky projekt përmbush kërkesat teknike për implementimin e projekteve në Siste
 - 📝 `docker/data-ingestion-service/app.py` - Shtuar service registration me Consul dhe integrimi i Schema Registry me Avro
 - 📝 `docker/data-ingestion-service/requirements.txt` - Shtuar `consul==1.1.0` dhe `confluent-kafka[avro]==2.3.0`
 
+**Analytics Service:**
+- 📝 `docker/analytics-service/cache.py` - Shtuar write-through caching me Redis dhe Memcached
+- 📝 `docker/analytics-service/app.py` - Integrimi i Memcached
+- 📝 `docker/analytics-service/requirements.txt` - Shtuar `pymemcache==4.0.0`
+
+**User Management Service:**
+- 📝 `docker/user-management-service/app.py` - Integrimi i MongoDB për audit logs
+- 📝 `docker/user-management-service/requirements.txt` - Shtuar `pymongo==4.6.0`
+
+**Docker Compose:**
+- 📝 `docker/docker-compose.yml` - Shtuar Memcached dhe MongoDB services
+
+**Runbooks:**
+- 📝 `RUNBOOKS.md` - Përditësuar me MongoDB dhe Memcached troubleshooting
+
 **Dokumentim:**
-- 📝 `README.md` - Përditësuar me seksione të reja për Consul, Schema Registry, dhe Helm Charts
+- 📝 `README.md` - Përditësuar me seksione të reja për të gjitha implementimet
 
 ## 🆕 Përditësimet e Fundit
 
@@ -241,11 +263,60 @@ helm install smartgrid ./kubernetes/helm/smartgrid \
 - Versioning dhe rollback support
 - Konfigurim centralizuar
 
-### 📝 Dokumentim i Shtuar
+### ✅ Memcached Integration - IMPLEMENTUAR
 
-- `IMPLEMENTATION_COMPLETED.md` - Dokumentim i detajuar i implementimeve
-- `MISSING_COMPONENTS.md` - Analizë e komponentëve që mungojnë
-- `MISSING_COMPONENTS_SUMMARY.md` - Përmbledhje e shkurtër
+**Çfarë është shtuar:**
+- Memcached service për distributed caching
+- Integrimi në Analytics Service me write-through caching
+- Fallback automatik në Redis nëse Memcached dështon
+
+**Vendndodhja:**
+- `docker/docker-compose.yml` - Memcached service
+- `docker/analytics-service/cache.py` - Write-through caching implementation
+- `docker/analytics-service/app.py` - Memcached integration
+
+**Si funksionon:**
+- Shkruan në Redis dhe Memcached njëkohësisht (write-through)
+- Lexon nga cache-i i parë që ka rezultat
+- Fallback automatik nëse njëri cache dështon
+
+### ✅ MongoDB për Hybrid Storage - IMPLEMENTUAR
+
+**Çfarë është shtuar:**
+- MongoDB service për hybrid storage models
+- Integrimi për audit logs në User Management Service
+- Shkruan në të dy (PostgreSQL + MongoDB) për redundancy
+
+**Vendndodhja:**
+- `docker/docker-compose.yml` - MongoDB service
+- `docker/user-management-service/mongodb_audit.py` - MongoDB client për audit logs
+- `docker/user-management-service/app.py` - Integration me MongoDB
+
+**Si funksionon:**
+- Audit logs ruhen në të dy (PostgreSQL dhe MongoDB)
+- MongoDB përdoret për metadata dhe audit logs
+- Fallback në PostgreSQL nëse MongoDB dështon
+
+### ✅ Dokumentim UML/ERD - IMPLEMENTUAR
+
+**Çfarë është shtuar:**
+- ERD diagrams dhe data modeling documentation
+- UML component diagrams për arkitekturë
+- Modelimi konceptual, logjik dhe fizik
+
+**Vendndodhja:**
+- `docs/data-modeling-erd.md` - ERD dhe data modeling
+- `docs/architecture-uml.md` - UML diagrams
+
+### ✅ Runbooks & Playbooks - IMPLEMENTUAR
+
+**Çfarë është shtuar:**
+- Runbooks për incident response
+- Playbooks për recovery procedures
+- Dokumentim i troubleshooting procedures
+
+**Vendndodhja:**
+- `RUNBOOKS.md` - Runbooks dhe playbooks të dokumentuara
 
 ## 🔧 Konfigurim i Ri
 
@@ -260,10 +331,25 @@ helm install smartgrid ./kubernetes/helm/smartgrid \
 - `USE_SCHEMA_REGISTRY=true/false` - Aktivizo/deaktivizo Schema Registry (default: true)
 - `SCHEMA_REGISTRY_URL=http://smartgrid-schema-registry:8081` - Schema Registry URL
 
+**Për Memcached:**
+- `MEMCACHED_HOST=smartgrid-memcached` - Memcached host
+- `MEMCACHED_PORT=11211` - Memcached port
+- `USE_MEMCACHED=true` - Aktivizo/deaktivizo Memcached
+
+**Për MongoDB:**
+- `MONGODB_HOST=smartgrid-mongodb` - MongoDB host
+- `MONGODB_PORT=27017` - MongoDB port
+- `MONGODB_DB=smartgrid_audit` - MongoDB database
+- `MONGODB_USER=smartgrid` - MongoDB user
+- `MONGODB_PASSWORD=smartgrid123` - MongoDB password
+- `USE_MONGODB_AUDIT=true` - Aktivizo/deaktivizo MongoDB audit logs
+
 ## 📦 Dependencies e Reja
 
 - `consul==1.1.0` - Consul client library (në API Gateway dhe Data Ingestion Service)
 - `confluent-kafka[avro]==2.3.0` - Avro support për Kafka (në Data Ingestion Service)
+- `pymemcache==4.0.0` - Memcached client (në Analytics Service)
+- `pymongo==4.6.0` - MongoDB client (në User Management Service)
 
 ## Kontribut
 
