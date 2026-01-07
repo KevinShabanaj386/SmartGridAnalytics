@@ -391,7 +391,8 @@ def login():
         behavioral_warning = None
         if BEHAVIORAL_ANALYTICS_AVAILABLE:
             try:
-                features = get_user_behavior_features(user['id'], request.remote_addr, request.headers.get('User-Agent'))
+                # get_user_behavior_features merr vetëm user_id dhe days (default 30)
+                features = get_user_behavior_features(user['id'], days=30)
                 anomalies = detect_behavioral_anomalies(user['id'], features)
                 if anomalies:
                     behavioral_warning = {
