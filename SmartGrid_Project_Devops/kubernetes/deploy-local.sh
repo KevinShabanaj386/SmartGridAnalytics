@@ -4,7 +4,9 @@
 
 set -e
 
-KUBERNETES_DIR="SmartGrid_Project_Devops/kubernetes"
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KUBERNETES_DIR="$SCRIPT_DIR"
 NAMESPACE="smartgrid"
 
 echo "=== Kubernetes Deployment ==="
