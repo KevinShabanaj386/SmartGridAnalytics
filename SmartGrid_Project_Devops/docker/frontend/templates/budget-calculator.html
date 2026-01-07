@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalkulator i Buxhetit për Energji - Smart Grid Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/css/simple-style.css?v=2.0">
+    <style>
+        .calculator-container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+        }
+
+        .calculator-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .calculator-header h1 {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+
+        .calculator-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .tab-button {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            color: #6b7280;
+            transition: all 0.3s;
+        }
+
+        .tab-button.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+        }
+
+        .tab-button:hover {
+            color: var(--primary-color);
+        }
+
+        .calculator-form {
+            display: none;
+        }
+
+        .calculator-form.active {
+            display: block;
+        }
+
+        .input-group {
+            margin-bottom: 25px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .input-with-icon {
+            position: relative;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            font-size: 18px;
+        }
+
+        .input-with-icon input {
+            padding-left: 45px;
+        }
+
+        .calculate-button {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+
+        .calculate-button:hover {
+            background: var(--primary-color-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .result-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        .result-card.active {
+            display: block;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-value {
+            font-size: 48px;
+            font-weight: 700;
+            margin: 15px 0;
+        }
+
+        .result-label {
+            font-size: 18px;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+
+        .price-info {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        .price-info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .peak-hour-notice {
+            background: rgba(255, 193, 7, 0.2);
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+
+        .validity-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .disclaimer {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #6b7280;
+            border-left: 4px solid #9ca3af;
+        }
+
+        .auto-refresh-indicator {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        .refresh-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #10b981;
+            color: white;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="calculator-container">
+        <div class="calculator-header">
+            <h1>💰 Kalkulator i Buxhetit për Energji</h1>
+            <p style="color: #6b7280;">Llogarit sa kWh mund të konsumosh për një shumë në Euro, ose anasjelltas</p>
+        </div>
+
+        <div class="calculator-tabs">
+            <button class="tab-button active" onclick="switchTab('forward')">
+                € → kWh
+            </button>
+            <button class="tab-button" onclick="switchTab('reverse')">
+                kWh → €
+            </button>
+        </div>
+
+        <!-- Forward Calculation: € → kWh -->
+        <div id="forwardForm" class="calculator-form active">
+            <div class="input-group">
+                <label for="amountEur">Shuma në Euro (€)</label>
+                <div class="input-with-icon">
+                    <span class="input-icon">€</span>
+                    <input type="number" id="amountEur" placeholder="10.00" step="0.01" min="0">
+                </div>
+            </div>
+            <button class="calculate-button" onclick="calculateForward()">
+                Llogarit kWh
+            </button>
+        </div>
+
+        <!-- Reverse Calculation: kWh → € -->
+        <div id="reverseForm" class="calculator-form">
+            <div class="input-group">
+                <label for="amountKwh">Konsum në Kilowatt-orë (kWh)</label>
+                <div class="input-with-icon">
+                    <span class="input-icon">⚡</span>
+                    <input type="number" id="amountKwh" placeholder="100.00" step="0.01" min="0">
+                </div>
+            </div>
+            <button class="calculate-button" onclick="calculateReverse()">
+                Llogarit Kosto (€)
+            </button>
+        </div>
+
+        <!-- Result Card -->
+        <div id="resultCard" class="result-card">
+            <div class="result-label" id="resultLabel"></div>
+            <div class="result-value" id="resultValue"></div>
+            <div class="result-label" id="resultUnit"></div>
+
+            <div class="price-info" id="priceInfo"></div>
+            <div id="peakHourNotice"></div>
+            <div id="validityInfo"></div>
+        </div>
+
+        <div class="disclaimer">
+            <strong>⚠️ Shënim:</strong> Çmimet mund të ndryshojnë me kalimin e kohës. Kjo llogaritje është e vlefshme vetëm për momentin aktual. Për çmime të ardhshme, rikalkulo.
+        </div>
+
+        <div class="auto-refresh-indicator">
+            <span class="refresh-badge">🔄 Auto-refresh çdo 60 sekonda</span>
+        </div>
+    </div>
+
+    <script>
+        let refreshInterval = null;
+        let currentCalculation = null;
+
+        function switchTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update forms
+            document.querySelectorAll('.calculator-form').forEach(form => form.classList.remove('active'));
+            if (tab === 'forward') {
+                document.getElementById('forwardForm').classList.add('active');
+            } else {
+                document.getElementById('reverseForm').classList.add('active');
+            }
+
+            // Clear result
+            document.getElementById('resultCard').classList.remove('active');
+        }
+
+        async function calculateForward() {
+            const amountEur = parseFloat(document.getElementById('amountEur').value);
+            
+            if (!amountEur || amountEur <= 0) {
+                alert('Ju lutem shkruani një shumë të vlefshme në Euro');
+                return;
+            }
+
+            currentCalculation = { type: 'forward', value: amountEur };
+            await performCalculation('forward', amountEur);
+        }
+
+        async function calculateReverse() {
+            const amountKwh = parseFloat(document.getElementById('amountKwh').value);
+            
+            if (!amountKwh || amountKwh <= 0) {
+                alert('Ju lutem shkruani një konsum të vlefshëm në kWh');
+                return;
+            }
+
+            currentCalculation = { type: 'reverse', value: amountKwh };
+            await performCalculation('reverse', amountKwh);
+        }
+
+        async function performCalculation(type, value) {
+            try {
+                const url = type === 'forward' 
+                    ? `/api/v1/analytics/budget-calculator?amount_eur=${value}`
+                    : `/api/v1/analytics/budget-calculator?amount_kwh=${value}`;
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    displayResult(data, type);
+                } else {
+                    alert('Gabim: ' + (data.error || 'Llogaritja dështoi'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Gabim në lidhje me serverin. Ju lutem provoni përsëri.');
+            }
+        }
+
+        function displayResult(data, type) {
+            const resultCard = document.getElementById('resultCard');
+            const resultLabel = document.getElementById('resultLabel');
+            const resultValue = document.getElementById('resultValue');
+            const resultUnit = document.getElementById('resultUnit');
+            const priceInfo = document.getElementById('priceInfo');
+            const peakHourNotice = document.getElementById('peakHourNotice');
+            const validityInfo = document.getElementById('validityInfo');
+
+            if (type === 'forward') {
+                resultLabel.textContent = 'Mund të konsumoni:';
+                resultValue.textContent = data.output.kwh.toLocaleString('sq-AL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                resultUnit.textContent = 'kWh';
+            } else {
+                resultLabel.textContent = 'Kostoja totale:';
+                resultValue.textContent = data.output.amount_eur.toLocaleString('sq-AL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                resultUnit.textContent = '€';
+            }
+
+            // Price info
+            const priceInfoHtml = `
+                <div class="price-info-item">
+                    <span>Çmim aktual:</span>
+                    <strong>${data.price_info.price_eur_per_kwh.toFixed(4)} €/kWh</strong>
+                </div>
+                <div class="price-info-item">
+                    <span>Çmim bazë:</span>
+                    <span>${data.price_info.base_price_eur_per_kwh.toFixed(4)} €/kWh</span>
+                </div>
+                <div class="price-info-item">
+                    <span>Lloji tarifës:</span>
+                    <span>${data.price_info.tariff_type}</span>
+                </div>
+                <div class="price-info-item">
+                    <span>Ora aktuale:</span>
+                    <span>${data.price_info.current_hour}:00</span>
+                </div>
+            `;
+            priceInfo.innerHTML = priceInfoHtml;
+
+            // Peak hour notice
+            if (data.peak_hour_notice) {
+                peakHourNotice.innerHTML = `
+                    <div class="peak-hour-notice">
+                        <strong>⏰ Ora e Pikut:</strong> ${data.peak_hour_notice.message}<br>
+                        <small>💡 Këshillë: ${data.peak_hour_notice.savings_tip}</small>
+                    </div>
+                `;
+            } else {
+                peakHourNotice.innerHTML = '';
+            }
+
+            // Validity info
+            if (data.validity) {
+                validityInfo.innerHTML = `
+                    <div class="validity-info">
+                        <strong>✓ Çmimi është i vlefshëm për ${data.validity.valid_for_hours} orë të tjera</strong><br>
+                        <small>${data.validity.note}</small>
+                    </div>
+                `;
+            } else {
+                validityInfo.innerHTML = '';
+            }
+
+            resultCard.classList.add('active');
+
+            // Auto-refresh setup
+            if (refreshInterval) clearInterval(refreshInterval);
+            refreshInterval = setInterval(() => {
+                if (currentCalculation) {
+                    performCalculation(currentCalculation.type, currentCalculation.value);
+                }
+            }, 60000); // Refresh every 60 seconds
+        }
+
+        // Auto-calculate on Enter key
+        document.getElementById('amountEur').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') calculateForward();
+        });
+
+        document.getElementById('amountKwh').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') calculateReverse();
+        });
+    </script>
+</body>
+</html>
+

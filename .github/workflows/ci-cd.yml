@@ -228,182 +228,95 @@ jobs:
 
   # Job për deployment në Kubernetes (nëse është main branch)
   deploy:
-    name: Deploy në Kubernetes
+    name: Deploy në Kubernetes (client-side validation only)
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
     - name: Set up kubectl
       uses: azure/setup-kubectl@v3
       with:
         version: 'latest'
-    
-    - name: Validate Kubernetes manifests
+
+    - name: Client-side validation of Kubernetes manifests (no cluster)
       run: |
-        echo "Validating Kubernetes manifests (syntax only, no cluster required)..."
+        echo "=== Client-side validation of Kubernetes manifests ==="
+        echo "This step validates YAML and basic structure without contacting a cluster."
         echo ""
-        echo "Checking for Kubernetes manifest files..."
+
+        # Ensure kubectl does not use any default kubeconfig pointing to localhost
+        unset KUBECONFIG || true
+
         if [ ! -d "SmartGrid_Project_Devops/kubernetes" ]; then
           echo "❌ Error: Kubernetes directory not found"
           exit 1
         fi
-        
-        # Find all YAML files in kubernetes directory (excluding subdirectories that might have non-manifest files)
-        MANIFEST_FILES=$(find SmartGrid_Project_Devops/kubernetes -maxdepth 1 -name "*.yaml" -o -name "*.yml" 2>/dev/null || true)
-        
-        if [ -z "$MANIFEST_FILES" ]; then
-          echo "⚠️ Warning: No YAML manifest files found in SmartGrid_Project_Devops/kubernetes/"
-          echo "This might be expected if manifests are in subdirectories"
-        else
-          echo "Found manifest files:"
-          echo "$MANIFEST_FILES" | while read -r file; do
-            echo "  - $file"
-          done
-        fi
-        
-        # Validate manifests with --validate=false to avoid OpenAPI schema download
-        # This validates YAML syntax and basic Kubernetes resource structure
-        echo ""
-        echo "Validating manifest syntax..."
+
         VALIDATION_ERRORS=0
-        
-        # Validate each top-level YAML file
-        for file in SmartGrid_Project_Devops/kubernetes/*.yaml SmartGrid_Project_Devops/kubernetes/*.yml; do
-          if [ -f "$file" ]; then
-            echo "Validating: $file"
-            if ! kubectl apply --dry-run=client --validate=false -f "$file" > /dev/null 2>&1; then
-              echo "  ❌ Validation failed for: $file"
+
+        validate_file() {
+          local f="$1"
+          if [ -f "$f" ]; then
+            echo "Validating: $f"
+            if ! kubectl apply --dry-run=client --validate=false -f "$f" > /dev/null 2>&1; then
+              echo "  ❌ Validation failed for: $f"
               VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
             else
-              echo "  ✅ Valid: $file"
+              echo "  ✅ Valid: $f"
             fi
           fi
+        }
+
+        # Top-level manifests
+        for f in SmartGrid_Project_Devops/kubernetes/*.yaml SmartGrid_Project_Devops/kubernetes/*.yml; do
+          validate_file "$f"
         done
-        
-        # Also validate subdirectories (deployments, configmaps, etc.)
+
+        # Subdirectories (e.g. infrastructure, services, etc.)
         for dir in SmartGrid_Project_Devops/kubernetes/*/; do
           if [ -d "$dir" ]; then
-            echo "Validating directory: $dir"
-            for file in "$dir"*.yaml "$dir"*.yml; do
-              if [ -f "$file" ]; then
-                echo "Validating: $file"
-                if ! kubectl apply --dry-run=client --validate=false -f "$file" > /dev/null 2>&1; then
-                  echo "  ❌ Validation failed for: $file"
-                  VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
-                else
-                  echo "  ✅ Valid: $file"
-                fi
-              fi
+            echo "--- Directory: $dir ---"
+            for f in "$dir"*.yaml "$dir"*.yml; do
+              validate_file "$f"
             done
           fi
         done
-        
+
         if [ $VALIDATION_ERRORS -gt 0 ]; then
           echo ""
-          echo "⚠️ Validation warnings for $VALIDATION_ERRORS file(s)"
-          echo "⚠️ This might be due to:"
-          echo "   - Missing CRDs (e.g., Istio resources require Istio to be installed)"
-          echo "   - Resources that require cluster connection for full validation"
-          echo "⚠️ Continuing anyway - actual deployment will validate against cluster if available"
-          echo "⚠️ If KUBECONFIG is not configured, this is expected and deployment will be skipped"
-          # Don't exit with error - let deployment step handle it
-          exit 0
-        else
-          echo ""
-          echo "✅ All manifest files are syntactically valid"
-        fi
-    
-    - name: Configure kubectl
-      if: secrets.KUBECONFIG != ''
-      run: |
-        echo "=== Configuring kubectl ==="
-        echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
-        chmod 600 kubeconfig
-        export KUBECONFIG=$(pwd)/kubeconfig
-        echo "KUBECONFIG=$(pwd)/kubeconfig" >> $GITHUB_ENV
-        
-        # Test cluster connection
-        echo "Testing cluster connection..."
-        if kubectl cluster-info > /dev/null 2>&1; then
-          echo "✅ Successfully connected to cluster"
-          kubectl cluster-info
-          echo ""
-          echo "Cluster context:"
-          kubectl config current-context || echo "No context set"
-        else
-          echo "⚠️ Warning: Could not connect to cluster. KUBECONFIG may be invalid or cluster unavailable."
-          echo "⚠️ Deployment will be skipped."
-          exit 0
-        fi
-    
-    - name: Create namespace (if needed)
-      if: secrets.KUBECONFIG != ''
-      env:
-        KUBECONFIG: ${{ github.workspace }}/kubeconfig
-      run: |
-        echo "=== Creating namespace (if needed) ==="
-        export KUBECONFIG="$KUBECONFIG"
-        
-        if kubectl get namespace smartgrid > /dev/null 2>&1; then
-          echo "✅ Namespace 'smartgrid' already exists"
-        else
-          echo "Creating namespace 'smartgrid'..."
-          kubectl create namespace smartgrid || {
-            echo "⚠️ Warning: Could not create namespace. It may already exist."
-          }
-          echo "✅ Namespace created"
-        fi
-    
-    - name: Deploy në Kubernetes
-      if: secrets.KUBECONFIG != ''
-      env:
-        KUBECONFIG: ${{ github.workspace }}/kubeconfig
-      run: |
-        echo "=== Deploying to Kubernetes ==="
-        echo "KUBECONFIG: $KUBECONFIG"
-        export KUBECONFIG="$KUBECONFIG"
-        
-        # Verify cluster connection
-        if ! kubectl cluster-info > /dev/null 2>&1; then
-          echo "❌ ERROR: Cannot connect to cluster. Deployment aborted."
+          echo "⚠️ Validation failed for $VALIDATION_ERRORS file(s).""
           exit 1
         fi
-        
-        echo "✅ Cluster connection verified"
+
         echo ""
-        echo "Deploying manifests to namespace 'smartgrid'..."
-        echo "Note: Server-side validation will occur during actual deployment."
-        echo ""
-        
-        # Deploy infrastructure first (including Trino and Delta Lake)
-        echo "Deploying infrastructure (PostgreSQL, Kafka, Redis, Consul, Vault, Trino, Delta Lake)..."
-        kubectl apply -f SmartGrid_Project_Devops/kubernetes/infrastructure/ -n smartgrid || echo "⚠️ Some infrastructure resources may already exist"
-        
-        # Wait for infrastructure to stabilize
-        echo "Waiting 10 seconds for infrastructure to stabilize..."
-        sleep 10
-        
-        # Deploy with server-side validation (cluster is available)
-        # This will validate against the actual cluster's OpenAPI schema
-        kubectl apply -f SmartGrid_Project_Devops/kubernetes/ -n smartgrid
-        
-        echo ""
-        echo "✅ Deployment completed successfully"
-        echo "✅ Trino federated query engine deployed"
-        echo "✅ Delta Lake storage configured"
-    
-    - name: Verify deployment
-      if: secrets.KUBECONFIG != ''
-      env:
-        KUBECONFIG: ${{ github.workspace }}/kubeconfig
+        echo "✅ All manifest files passed client-side validation."
+
+    - name: Check KUBECONFIG availability
+      id: check_kubeconfig
       run: |
-        echo "=== Verifying Deployment ==="
-        export KUBECONFIG="$KUBECONFIG"
+        if [ -n "${{ secrets.KUBECONFIG }}" ]; then
+          echo "available=true" >> $GITHUB_OUTPUT
+        else
+          echo "available=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Deploy to cluster (if KUBECONFIG available)
+      if: steps.check_kubeconfig.outputs.available == 'true'
+      env:
+        KUBECONFIG: ${{ secrets.KUBECONFIG }}
+      run: |
+        echo "=== Deploying to Kubernetes cluster ==="
+        echo "KUBECONFIG is configured. Proceeding with deployment."
+        
+        # Write KUBECONFIG to file
+        mkdir -p ~/.kube
+        echo "$KUBECONFIG" > ~/.kube/config
+        chmod 600 ~/.kube/config
         
         echo "Waiting for resources to be created..."
         sleep 5
@@ -455,9 +368,10 @@ jobs:
         echo "✅ Deployment verification completed"
     
     - name: Skip deployment (no KUBECONFIG)
-      if: secrets.KUBECONFIG == ''
+      if: steps.check_kubeconfig.outputs.available == 'false'
       run: |
-        echo "ℹ️ KUBECONFIG secret not configured. Skipping actual deployment."
+        echo "=== Skipping Kubernetes Deployment ==="
+        echo "KUBECONFIG secret is not set. Skipping Kubernetes deployment."
         echo "✅ Manifest validation passed. Deployment would proceed if KUBECONFIG was available."
 
   # Job për security scanning

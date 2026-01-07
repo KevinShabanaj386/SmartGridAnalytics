@@ -118,6 +118,140 @@ def get_db_connection():
             pass  # Index mund të ekzistojë tashmë
     return conn
 
+def get_energy_price_eur_per_kwh(tariff_type: str = 'residential', consider_peak_hours: bool = True) -> dict:
+    """
+    Merr çmimin e energjisë në Euro për kWh nga price collector service
+    Returns dict me price, is_peak, validity period, etj.
+    consider_peak_hours: Nëse True, aplikon peak hour multiplier
+    """
+    try:
+        import requests
+        from datetime import datetime
+        
+        # Default price për Kosovën (nëse service nuk është i disponueshëm)
+        DEFAULT_PRICE_EUR_PER_KWH = 0.085  # ~0.085 €/kWh për Kosovën (mesatare)
+        PEAK_HOUR_MULTIPLIER = 1.15  # 15% më i lartë gjatë peak hours
+        PEAK_HOURS = [8, 9, 10, 18, 19, 20]  # 8-10 AM dhe 6-8 PM
+        
+        current_hour = datetime.now().hour
+        is_peak = consider_peak_hours and current_hour in PEAK_HOURS
+        
+        # Try to get price from Kosovo price collector
+        price_urls = [
+            os.getenv('KOSOVO_PRICE_SERVICE_URL', 'http://kosovo-energy-price-collector:5008'),
+            'http://localhost:5008',
+            'http://127.0.0.1:5008'
+        ]
+        
+        base_price = None
+        price_source = 'default'
+        price_timestamp = None
+        
+        for url in price_urls:
+            try:
+                response = requests.get(f'{url}/api/v1/prices/latest', timeout=3)
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('status') == 'success' and 'data' in data:
+                        # Extract price nga data
+                        prices_data = data['data']
+                        if isinstance(prices_data, list) and len(prices_data) > 0:
+                            for price_source_data in prices_data:
+                                if 'prices' in price_source_data:
+                                    prices = price_source_data['prices']
+                                    # Try tariff_type first, then default
+                                    if tariff_type in prices:
+                                        price_info = prices[tariff_type]
+                                        if 'price_eur_per_kwh' in price_info:
+                                            base_price = float(price_info['price_eur_per_kwh'])
+                                            price_source = price_source_data.get('source', 'unknown')
+                                            price_timestamp = price_source_data.get('scraped_at', datetime.now().isoformat())
+                                            break
+                                    elif 'default' in prices:
+                                        price_info = prices['default']
+                                        if 'price_eur_per_kwh' in price_info:
+                                            base_price = float(price_info['price_eur_per_kwh'])
+                                            price_source = price_source_data.get('source', 'unknown')
+                                            price_timestamp = price_source_data.get('scraped_at', datetime.now().isoformat())
+                                            break
+                                    elif 'residential' in prices:
+                                        price_info = prices['residential']
+                                        if 'price_eur_per_kwh' in price_info:
+                                            base_price = float(price_info['price_eur_per_kwh'])
+                                            price_source = price_source_data.get('source', 'unknown')
+                                            price_timestamp = price_source_data.get('scraped_at', datetime.now().isoformat())
+                                            break
+            except (requests.exceptions.RequestException, KeyError, ValueError) as e:
+                logger.debug(f"Could not get price from {url}: {e}")
+                continue
+        
+        # Use default price nëse nuk mund të merret
+        if base_price is None:
+            base_price = DEFAULT_PRICE_EUR_PER_KWH
+            price_source = 'default'
+            price_timestamp = datetime.now().isoformat()
+            logger.info(f"Using default energy price: {DEFAULT_PRICE_EUR_PER_KWH} €/kWh")
+        
+        # Apply peak hour multiplier nëse është peak hour
+        final_price = base_price
+        if is_peak:
+            final_price = base_price * PEAK_HOUR_MULTIPLIER
+        
+        # Calculate validity period (prices typically valid for 24 hours)
+        validity_until = None
+        if price_timestamp:
+            try:
+                from datetime import timedelta
+                price_dt = datetime.fromisoformat(price_timestamp.replace('Z', '+00:00'))
+                validity_until = (price_dt + timedelta(hours=24)).isoformat()
+            except:
+                validity_until = (datetime.now() + timedelta(hours=24)).isoformat()
+        
+        return {
+            'price_eur_per_kwh': round(final_price, 4),
+            'base_price_eur_per_kwh': round(base_price, 4),
+            'is_peak_hour': is_peak,
+            'peak_multiplier': PEAK_HOUR_MULTIPLIER if is_peak else 1.0,
+            'current_hour': current_hour,
+            'tariff_type': tariff_type,
+            'price_source': price_source,
+            'price_timestamp': price_timestamp,
+            'validity_until': validity_until,
+            'currency': 'EUR'
+        }
+        
+    except Exception as e:
+        logger.warning(f"Error getting energy price: {e}, using default")
+        return {
+            'price_eur_per_kwh': 0.085,
+            'base_price_eur_per_kwh': 0.085,
+            'is_peak_hour': False,
+            'peak_multiplier': 1.0,
+            'current_hour': datetime.now().hour,
+            'tariff_type': tariff_type,
+            'price_source': 'default',
+            'price_timestamp': datetime.now().isoformat(),
+            'validity_until': (datetime.now() + timedelta(hours=24)).isoformat(),
+            'currency': 'EUR'
+        }
+
+def calculate_cost_eur(consumption_kwh: float, price_eur_per_kwh: float = None) -> float:
+    """
+    Llogarit koston në Euro për një konsum të dhënë
+    consumption_kwh: Konsumi në kWh (ose MW × 1000 për konvertim)
+    price_eur_per_kwh: Çmimi për kWh (nëse None, merr nga price service)
+    """
+    if price_eur_per_kwh is None:
+        price_info = get_energy_price_eur_per_kwh()
+        price_eur_per_kwh = price_info['price_eur_per_kwh']
+    
+    # Nëse consumption është në MW, konverto në kWh
+    # (Supozojmë që nëse > 1000, është në MW, përndryshe kWh)
+    if consumption_kwh > 1000:
+        consumption_kwh = consumption_kwh * 1000  # MW to kWh
+    
+    return round(consumption_kwh * price_eur_per_kwh, 2)
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -915,15 +1049,26 @@ def get_consumption_trends():
         
         trends = []
         from decimal import Decimal
+        
+        # Merr çmimin e energjisë për llogaritjen e kostos
+        price_info = get_energy_price_eur_per_kwh()
+        price_eur_per_kwh = price_info['price_eur_per_kwh']
+        
         for row in results:
             # Konverto decimal në float
             total_consumption = float(row['total_consumption']) if isinstance(row['total_consumption'], (Decimal, int, float)) else 0.0
             avg_reading = float(row['avg_reading']) if isinstance(row['avg_reading'], (Decimal, int, float)) else 0.0
             reading_count = int(row['reading_count']) if isinstance(row['reading_count'], (Decimal, int)) else 0
             
+            # Llogarit koston në Euro
+            # Supozojmë që total_consumption është në kWh (ose MW × 1000)
+            cost_eur = calculate_cost_eur(total_consumption, price_eur_per_kwh)
+            
             trends.append({
                 'date': row['day'].isoformat() if hasattr(row['day'], 'isoformat') else str(row['day']),
-                'total_consumption': total_consumption,
+                'total_consumption_kwh': total_consumption,
+                'total_consumption_mw': round(total_consumption / 1000, 2) if total_consumption > 1000 else total_consumption,
+                'cost_eur': cost_eur,
                 'avg_reading': avg_reading,
                 'reading_count': reading_count
             })
@@ -931,11 +1076,657 @@ def get_consumption_trends():
         return jsonify({
             'status': 'success',
             'trends': trends,
-            'period_days': days
+            'period_days': days,
+            'price_eur_per_kwh': price_eur_per_kwh,
+            'currency': 'EUR'
         }), 200
         
     except Exception as e:
         logger.error(f"Error getting consumption trends: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/consumption/trends/monthly', methods=['GET'])
+def get_monthly_trends():
+    """
+    Kthen trendet mujore të konsumit
+    Query params: customer_id, months (default: 12)
+    """
+    try:
+        customer_id = request.args.get('customer_id')
+        months = int(request.args.get('months', 12))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        query = """
+            SELECT 
+                DATE_TRUNC('month', timestamp) as month,
+                SUM(value) as total_consumption,
+                AVG(value) as avg_reading,
+                COUNT(*) as reading_count,
+                MIN(value) as min_consumption,
+                MAX(value) as max_consumption
+            FROM sensor_data
+            WHERE timestamp >= NOW() - INTERVAL '%s months'
+            AND sensor_type IN ('power', 'voltage', 'current')
+        """
+        params = [months]
+        
+        if customer_id:
+            query += " AND customer_id = %s"
+            params.append(customer_id)
+        
+        query += " GROUP BY DATE_TRUNC('month', timestamp) ORDER BY month"
+        
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        trends = []
+        from decimal import Decimal
+        
+        # Merr çmimin e energjisë për llogaritjen e kostos
+        price_info = get_energy_price_eur_per_kwh()
+        price_eur_per_kwh = price_info['price_eur_per_kwh']
+        
+        for row in results:
+            total_consumption = float(row['total_consumption']) if isinstance(row['total_consumption'], (Decimal, int, float)) else 0.0
+            cost_eur = calculate_cost_eur(total_consumption, price_eur_per_kwh)
+            
+            trends.append({
+                'month': row['month'].isoformat() if hasattr(row['month'], 'isoformat') else str(row['month']),
+                'total_consumption_kwh': total_consumption,
+                'total_consumption_mw': round(total_consumption / 1000, 2) if total_consumption > 1000 else total_consumption,
+                'cost_eur': cost_eur,
+                'avg_reading': float(row['avg_reading']) if isinstance(row['avg_reading'], (Decimal, int, float)) else 0.0,
+                'min_consumption': float(row['min_consumption']) if isinstance(row['min_consumption'], (Decimal, int, float)) else 0.0,
+                'max_consumption': float(row['max_consumption']) if isinstance(row['max_consumption'], (Decimal, int, float)) else 0.0,
+                'reading_count': int(row['reading_count']) if isinstance(row['reading_count'], (Decimal, int)) else 0
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'trends': trends,
+            'period_months': months,
+            'price_eur_per_kwh': price_eur_per_kwh,
+            'currency': 'EUR'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting monthly trends: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/consumption/trends/seasonal', methods=['GET'])
+def get_seasonal_trends():
+    """
+    Kthen trendet sezonale të konsumit
+    Query params: customer_id, years (default: 2)
+    """
+    try:
+        customer_id = request.args.get('customer_id')
+        years = int(request.args.get('years', 2))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        query = """
+            SELECT 
+                CASE 
+                    WHEN EXTRACT(MONTH FROM timestamp) IN (12, 1, 2) THEN 'Winter'
+                    WHEN EXTRACT(MONTH FROM timestamp) IN (3, 4, 5) THEN 'Spring'
+                    WHEN EXTRACT(MONTH FROM timestamp) IN (6, 7, 8) THEN 'Summer'
+                    ELSE 'Fall'
+                END as season,
+                EXTRACT(YEAR FROM timestamp) as year,
+                SUM(value) as total_consumption,
+                AVG(value) as avg_reading,
+                COUNT(*) as reading_count
+            FROM sensor_data
+            WHERE timestamp >= NOW() - INTERVAL '%s years'
+            AND sensor_type IN ('power', 'voltage', 'current')
+        """
+        params = [years]
+        
+        if customer_id:
+            query += " AND customer_id = %s"
+            params.append(customer_id)
+        
+        query += " GROUP BY season, year ORDER BY year, season"
+        
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        trends = []
+        from decimal import Decimal
+        
+        # Merr çmimin e energjisë për llogaritjen e kostos
+        price_info = get_energy_price_eur_per_kwh()
+        price_eur_per_kwh = price_info['price_eur_per_kwh']
+        
+        for row in results:
+            total_consumption = float(row['total_consumption']) if isinstance(row['total_consumption'], (Decimal, int, float)) else 0.0
+            cost_eur = calculate_cost_eur(total_consumption, price_eur_per_kwh)
+            
+            trends.append({
+                'season': row['season'],
+                'year': int(row['year']) if isinstance(row['year'], (Decimal, int, float)) else 0,
+                'total_consumption_kwh': total_consumption,
+                'total_consumption_mw': round(total_consumption / 1000, 2) if total_consumption > 1000 else total_consumption,
+                'cost_eur': cost_eur,
+                'avg_reading': float(row['avg_reading']) if isinstance(row['avg_reading'], (Decimal, int, float)) else 0.0,
+                'reading_count': int(row['reading_count']) if isinstance(row['reading_count'], (Decimal, int)) else 0
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'trends': trends,
+            'period_years': years,
+            'price_eur_per_kwh': price_eur_per_kwh,
+            'currency': 'EUR'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting seasonal trends: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/consumption/year-comparison', methods=['GET'])
+def get_year_comparison():
+    """
+    Krahasim i konsumit ndërmjet viteve të ndryshme
+    Query params: customer_id, years (default: 2) - numri i viteve për të krahasuar
+    """
+    try:
+        customer_id = request.args.get('customer_id')
+        years = int(request.args.get('years', 2))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        query = """
+            SELECT 
+                EXTRACT(YEAR FROM timestamp) as year,
+                SUM(value) as total_consumption,
+                AVG(value) as avg_consumption,
+                MIN(value) as min_consumption,
+                MAX(value) as max_consumption,
+                COUNT(*) as reading_count
+            FROM sensor_data
+            WHERE timestamp >= NOW() - INTERVAL '%s years'
+            AND sensor_type IN ('power', 'voltage', 'current')
+        """
+        params = [years]
+        
+        if customer_id:
+            query += " AND customer_id = %s"
+            params.append(customer_id)
+        
+        query += " GROUP BY EXTRACT(YEAR FROM timestamp) ORDER BY year"
+        
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        comparisons = []
+        from decimal import Decimal
+        
+        # Merr çmimin e energjisë për llogaritjen e kostos
+        price_eur_per_kwh = get_energy_price_eur_per_kwh()
+        
+        previous_year_consumption = None
+        previous_year_cost = None
+        
+        for row in results:
+            year = int(row['year']) if isinstance(row['year'], (Decimal, int, float)) else 0
+            total_consumption = float(row['total_consumption']) if isinstance(row['total_consumption'], (Decimal, int, float)) else 0.0
+            cost_eur = calculate_cost_eur(total_consumption, price_eur_per_kwh)
+            
+            # Llogaritje e ndryshimit në përqindje për konsum dhe kosto
+            change_percent = None
+            cost_change_percent = None
+            if previous_year_consumption is not None and previous_year_consumption > 0:
+                change_percent = ((total_consumption - previous_year_consumption) / previous_year_consumption) * 100
+            if previous_year_cost is not None and previous_year_cost > 0:
+                cost_change_percent = ((cost_eur - previous_year_cost) / previous_year_cost) * 100
+            
+            comparisons.append({
+                'year': year,
+                'total_consumption_kwh': total_consumption,
+                'total_consumption_mw': round(total_consumption / 1000, 2) if total_consumption > 1000 else total_consumption,
+                'cost_eur': cost_eur,
+                'avg_consumption': float(row['avg_consumption']) if isinstance(row['avg_consumption'], (Decimal, int, float)) else 0.0,
+                'min_consumption': float(row['min_consumption']) if isinstance(row['min_consumption'], (Decimal, int, float)) else 0.0,
+                'max_consumption': float(row['max_consumption']) if isinstance(row['max_consumption'], (Decimal, int, float)) else 0.0,
+                'reading_count': int(row['reading_count']) if isinstance(row['reading_count'], (Decimal, int)) else 0,
+                'change_from_previous_year_percent': round(change_percent, 2) if change_percent is not None else None,
+                'cost_change_from_previous_year_percent': round(cost_change_percent, 2) if cost_change_percent is not None else None
+            })
+            
+            previous_year_consumption = total_consumption
+            previous_year_cost = cost_eur
+        
+        return jsonify({
+            'status': 'success',
+            'comparisons': comparisons,
+            'years_compared': years,
+            'price_eur_per_kwh': price_eur_per_kwh,
+            'currency': 'EUR'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting year comparison: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/consumption/growth-analysis', methods=['GET'])
+def get_growth_analysis():
+    """
+    Analizë e rritjes ose uljes së konsumit në periudha afatgjata
+    Query params: customer_id, days (default: 365) - periudha për analizë
+    """
+    try:
+        customer_id = request.args.get('customer_id')
+        days = int(request.args.get('days', 365))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Merr të dhënat për periudhën e specifikuar
+        query = """
+            SELECT 
+                DATE_TRUNC('day', timestamp) as day,
+                SUM(value) as total_consumption
+            FROM sensor_data
+            WHERE timestamp >= NOW() - INTERVAL '%s days'
+            AND sensor_type IN ('power', 'voltage', 'current')
+        """
+        params = [days]
+        
+        if customer_id:
+            query += " AND customer_id = %s"
+            params.append(customer_id)
+        
+        query += " GROUP BY DATE_TRUNC('day', timestamp) ORDER BY day"
+        
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        from decimal import Decimal
+        
+        # Merr çmimin e energjisë për llogaritjen e kostos
+        price_eur_per_kwh = get_energy_price_eur_per_kwh()
+        
+        consumptions = []
+        for row in results:
+            consumption = float(row['total_consumption']) if isinstance(row['total_consumption'], (Decimal, int, float)) else 0.0
+            cost_eur = calculate_cost_eur(consumption, price_eur_per_kwh)
+            
+            consumptions.append({
+                'date': row['day'].isoformat() if hasattr(row['day'], 'isoformat') else str(row['day']),
+                'consumption_kwh': consumption,
+                'consumption_mw': round(consumption / 1000, 2) if consumption > 1000 else consumption,
+                'cost_eur': cost_eur
+            })
+        
+        if len(consumptions) < 2:
+            return jsonify({
+                'status': 'success',
+                'message': 'Insufficient data for growth analysis',
+                'data_points': len(consumptions)
+            }), 200
+        
+        # Llogaritje e trendit për konsum dhe kosto
+        first_half = consumptions[:len(consumptions)//2]
+        second_half = consumptions[len(consumptions)//2:]
+        
+        first_half_avg_consumption = sum(c['consumption_kwh'] for c in first_half) / len(first_half) if first_half else 0
+        second_half_avg_consumption = sum(c['consumption_kwh'] for c in second_half) / len(second_half) if second_half else 0
+        
+        first_half_avg_cost = sum(c['cost_eur'] for c in first_half) / len(first_half) if first_half else 0
+        second_half_avg_cost = sum(c['cost_eur'] for c in second_half) / len(second_half) if second_half else 0
+        
+        # Llogaritje e përqindjes së ndryshimit
+        if first_half_avg_consumption > 0:
+            growth_percent = ((second_half_avg_consumption - first_half_avg_consumption) / first_half_avg_consumption) * 100
+        else:
+            growth_percent = 0
+        
+        if first_half_avg_cost > 0:
+            cost_growth_percent = ((second_half_avg_cost - first_half_avg_cost) / first_half_avg_cost) * 100
+        else:
+            cost_growth_percent = 0
+        
+        # Përcaktimi i trendit
+        if growth_percent > 5:
+            trend = "increasing"
+            trend_description = f"Konsumi po rritet me {abs(growth_percent):.2f}%"
+        elif growth_percent < -5:
+            trend = "decreasing"
+            trend_description = f"Konsumi po ulet me {abs(growth_percent):.2f}%"
+        else:
+            trend = "stable"
+            trend_description = f"Konsumi është relativisht i qëndrueshëm (ndryshim {growth_percent:.2f}%)"
+        
+        # Llogaritje e rritjes mesatare ditore
+        if len(consumptions) > 1:
+            first_consumption = consumptions[0]['consumption_kwh']
+            last_consumption = consumptions[-1]['consumption_kwh']
+            first_cost = consumptions[0]['cost_eur']
+            last_cost = consumptions[-1]['cost_eur']
+            days_span = len(consumptions)
+            if days_span > 0 and first_consumption > 0:
+                daily_growth_rate = ((last_consumption - first_consumption) / first_consumption) / days_span * 100
+            else:
+                daily_growth_rate = 0
+            if days_span > 0 and first_cost > 0:
+                daily_cost_growth_rate = ((last_cost - first_cost) / first_cost) / days_span * 100
+            else:
+                daily_cost_growth_rate = 0
+        else:
+            daily_growth_rate = 0
+            daily_cost_growth_rate = 0
+        
+        return jsonify({
+            'status': 'success',
+            'trend': trend,
+            'trend_description': trend_description,
+            'growth_percent': round(growth_percent, 2),
+            'cost_growth_percent': round(cost_growth_percent, 2),
+            'daily_growth_rate_percent': round(daily_growth_rate, 4),
+            'daily_cost_growth_rate_percent': round(daily_cost_growth_rate, 4),
+            'first_half_avg_consumption_kwh': round(first_half_avg_consumption, 2),
+            'second_half_avg_consumption_kwh': round(second_half_avg_consumption, 2),
+            'first_half_avg_cost_eur': round(first_half_avg_cost, 2),
+            'second_half_avg_cost_eur': round(second_half_avg_cost, 2),
+            'period_days': days,
+            'data_points': len(consumptions),
+            'first_date': consumptions[0]['date'] if consumptions else None,
+            'last_date': consumptions[-1]['date'] if consumptions else None,
+            'price_eur_per_kwh': price_eur_per_kwh,
+            'currency': 'EUR'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting growth analysis: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/budget-calculator', methods=['GET'])
+@cache_result(ttl=60)  # Cache për 1 minutë (real-time price updates)
+def budget_calculator():
+    """
+    Real-time Energy Budget Calculator
+    Llogarit sa kWh mund të konsumohen për një shumë në Euro, ose anasjelltas
+    
+    Query params:
+    - amount_eur: Shuma në Euro (për llogaritjen € → kWh)
+    - amount_kwh: Shuma në kWh (për llogaritjen kWh → €)
+    - tariff_type: residential, commercial, industrial (default: residential)
+    - include_peak_hours: true/false (default: true) - përfshi peak hour pricing
+    
+    Returns:
+    - Forward calculation (€ → kWh): amount_eur, calculated_kwh, price_info
+    - Reverse calculation (kWh → €): amount_kwh, calculated_eur, price_info
+    """
+    try:
+        from datetime import datetime, timedelta
+        
+        amount_eur = request.args.get('amount_eur')
+        amount_kwh = request.args.get('amount_kwh')
+        tariff_type = request.args.get('tariff_type', 'residential')
+        include_peak_hours = request.args.get('include_peak_hours', 'true').lower() == 'true'
+        
+        # Validate input
+        if not amount_eur and not amount_kwh:
+            return jsonify({
+                'error': 'Either amount_eur or amount_kwh must be provided',
+                'example_forward': '/api/v1/analytics/budget-calculator?amount_eur=10',
+                'example_reverse': '/api/v1/analytics/budget-calculator?amount_kwh=100'
+            }), 400
+        
+        if amount_eur and amount_kwh:
+            return jsonify({
+                'error': 'Provide either amount_eur OR amount_kwh, not both'
+            }), 400
+        
+        # Get current price with peak hour consideration
+        price_info = get_energy_price_eur_per_kwh(tariff_type, consider_peak_hours=include_peak_hours)
+        current_price = price_info['price_eur_per_kwh']
+        
+        result = {
+            'status': 'success',
+            'calculation_type': 'forward' if amount_eur else 'reverse',
+            'price_info': price_info,
+            'calculated_at': datetime.now().isoformat(),
+            'disclaimer': 'Prices may change over time. This calculation is valid for the current moment only.'
+        }
+        
+        # Forward calculation: € → kWh
+        if amount_eur:
+            try:
+                amount_eur_float = float(amount_eur)
+                if amount_eur_float < 0:
+                    return jsonify({'error': 'Amount must be positive'}), 400
+                
+                calculated_kwh = amount_eur_float / current_price
+                
+                result.update({
+                    'input': {
+                        'amount_eur': round(amount_eur_float, 2),
+                        'currency': 'EUR'
+                    },
+                    'output': {
+                        'kwh': round(calculated_kwh, 2),
+                        'mwh': round(calculated_kwh / 1000, 4) if calculated_kwh >= 1000 else None
+                    },
+                    'calculation': {
+                        'formula': f'{amount_eur_float} € ÷ {current_price} €/kWh = {calculated_kwh:.2f} kWh',
+                        'price_per_kwh': current_price
+                    }
+                })
+                
+            except ValueError:
+                return jsonify({'error': 'Invalid amount_eur value. Must be a number.'}), 400
+        
+        # Reverse calculation: kWh → €
+        elif amount_kwh:
+            try:
+                amount_kwh_float = float(amount_kwh)
+                if amount_kwh_float < 0:
+                    return jsonify({'error': 'Amount must be positive'}), 400
+                
+                calculated_eur = amount_kwh_float * current_price
+                
+                result.update({
+                    'input': {
+                        'kwh': round(amount_kwh_float, 2),
+                        'mwh': round(amount_kwh_float / 1000, 4) if amount_kwh_float >= 1000 else None
+                    },
+                    'output': {
+                        'amount_eur': round(calculated_eur, 2),
+                        'currency': 'EUR'
+                    },
+                    'calculation': {
+                        'formula': f'{amount_kwh_float} kWh × {current_price} €/kWh = {calculated_eur:.2f} €',
+                        'price_per_kwh': current_price
+                    }
+                })
+                
+            except ValueError:
+                return jsonify({'error': 'Invalid amount_kwh value. Must be a number.'}), 400
+        
+        # Add peak hour warning if applicable
+        if price_info['is_peak_hour']:
+            result['peak_hour_notice'] = {
+                'message': f"Current time is peak hour ({price_info['current_hour']}:00). Price includes {price_info['peak_multiplier']}x multiplier.",
+                'base_price': price_info['base_price_eur_per_kwh'],
+                'current_price': current_price,
+                'savings_tip': f"Consider using energy during off-peak hours (outside {price_info['current_hour']}:00) to save {round((current_price - price_info['base_price_eur_per_kwh']) * 100 / current_price, 1)}%"
+            }
+        
+        # Add validity period info
+        if price_info.get('validity_until'):
+            try:
+                validity_dt = datetime.fromisoformat(price_info['validity_until'].replace('Z', '+00:00'))
+                result['validity'] = {
+                    'valid_until': price_info['validity_until'],
+                    'valid_for_hours': round((validity_dt - datetime.now()).total_seconds() / 3600, 1),
+                    'note': 'Price may change after this period. Recalculate for accurate results.'
+                }
+            except:
+                pass
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        logger.error(f"Error in budget calculator: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/consumption/peak-hours/dynamic', methods=['GET'])
+def get_dynamic_peak_hours():
+    """
+    Identifikon dinamikisht peak hours bazuar në historical patterns dhe real-time data
+    Query params: days (default: 30) - numri i ditëve për analizë historike
+    """
+    try:
+        days = int(request.args.get('days', 30))
+        customer_id = request.args.get('customer_id')
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Merr consumption data për çdo orë të ditës për periudhën e specifikuar
+        # Përdor percentile_cont nëse disponohet, përndryshe llogarit manualisht
+        query = """
+            SELECT 
+                EXTRACT(HOUR FROM timestamp) as hour_of_day,
+                AVG(value) as avg_consumption,
+                MAX(value) as max_consumption,
+                MIN(value) as min_consumption,
+                COUNT(*) as reading_count,
+                STDDEV(value) as stddev_consumption
+            FROM sensor_data
+            WHERE timestamp >= NOW() - INTERVAL '%s days'
+            AND sensor_type IN ('power', 'voltage', 'current')
+        """
+        params = [days]
+        
+        if customer_id:
+            query += " AND customer_id = %s"
+            params.append(customer_id)
+        
+        query += " GROUP BY EXTRACT(HOUR FROM timestamp) ORDER BY hour_of_day"
+        
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        
+        if not results:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                'status': 'success',
+                'message': 'Insufficient data for peak hour detection',
+                'peak_hours': []
+            }), 200
+        
+        # Llogarit mesataren globale për të identifikuar peak hours
+        from decimal import Decimal
+        hourly_data = []
+        for row in results:
+            avg_consumption = float(row['avg_consumption']) if isinstance(row['avg_consumption'], (Decimal, int, float)) else 0.0
+            stddev = float(row['stddev_consumption']) if isinstance(row['stddev_consumption'], (Decimal, int, float)) and row['stddev_consumption'] is not None else 0.0
+            
+            # Llogarit percentile approximations bazuar në stddev
+            # P75 ≈ mean + 0.67*stddev, P90 ≈ mean + 1.28*stddev
+            p75_approx = avg_consumption + (0.67 * stddev) if stddev > 0 else avg_consumption
+            p90_approx = avg_consumption + (1.28 * stddev) if stddev > 0 else avg_consumption
+            
+            hourly_data.append({
+                'hour': int(row['hour_of_day']),
+                'avg_consumption': avg_consumption,
+                'max_consumption': float(row['max_consumption']) if isinstance(row['max_consumption'], (Decimal, int, float)) else 0.0,
+                'min_consumption': float(row['min_consumption']) if isinstance(row['min_consumption'], (Decimal, int, float)) else 0.0,
+                'reading_count': int(row['reading_count']) if isinstance(row['reading_count'], (Decimal, int)) else 0,
+                'stddev_consumption': stddev,
+                'p75_consumption': p75_approx,
+                'p90_consumption': p90_approx
+            })
+        
+        # Llogarit mesataren globale
+        global_avg = sum(h['avg_consumption'] for h in hourly_data) / len(hourly_data) if hourly_data else 0
+        
+        # Llogarit standard deviation
+        if len(hourly_data) > 1:
+            variance = sum((h['avg_consumption'] - global_avg) ** 2 for h in hourly_data) / len(hourly_data)
+            stddev = variance ** 0.5
+        else:
+            stddev = 0
+        
+        # Identifikon peak hours (orët me konsum më të lartë se mesatarja + 1 stddev)
+        # Ose top 25% e orëve me konsum më të lartë
+        threshold = global_avg + (stddev * 0.5) if stddev > 0 else global_avg * 1.2
+        
+        # Sort by average consumption
+        hourly_data_sorted = sorted(hourly_data, key=lambda x: x['avg_consumption'], reverse=True)
+        
+        # Top 25% e orëve janë peak hours
+        top_percentile = max(1, int(len(hourly_data_sorted) * 0.25))
+        peak_hours = hourly_data_sorted[:top_percentile]
+        
+        # Gjithashtu identifikon orët që kalojnë threshold
+        threshold_peak_hours = [h for h in hourly_data if h['avg_consumption'] >= threshold]
+        
+        # Kombino rezultatet (union)
+        peak_hour_set = set()
+        for h in peak_hours:
+            peak_hour_set.add(h['hour'])
+        for h in threshold_peak_hours:
+            peak_hour_set.add(h['hour'])
+        
+        # Krijon listë të renditur të peak hours
+        final_peak_hours = sorted(list(peak_hour_set))
+        
+        # Merr detajet për çdo peak hour
+        peak_hours_details = []
+        for hour in final_peak_hours:
+            hour_data = next((h for h in hourly_data if h['hour'] == hour), None)
+            if hour_data:
+                peak_hours_details.append({
+                    'hour': hour,
+                    'avg_consumption': round(hour_data['avg_consumption'], 2),
+                    'max_consumption': round(hour_data['max_consumption'], 2),
+                    'min_consumption': round(hour_data['min_consumption'], 2),
+                    'p75_consumption': round(hour_data['p75_consumption'], 2),
+                    'p90_consumption': round(hour_data['p90_consumption'], 2),
+                    'reading_count': hour_data['reading_count'],
+                    'above_global_avg_percent': round(((hour_data['avg_consumption'] - global_avg) / global_avg * 100) if global_avg > 0 else 0, 2)
+                })
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            'status': 'success',
+            'peak_hours': final_peak_hours,
+            'peak_hours_details': peak_hours_details,
+            'detection_method': 'dynamic_historical_analysis',
+            'analysis_period_days': days,
+            'global_avg_consumption': round(global_avg, 2),
+            'threshold_used': round(threshold, 2),
+            'total_hours_analyzed': len(hourly_data),
+            'peak_hours_count': len(final_peak_hours),
+            'detected_at': datetime.now().isoformat()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error detecting dynamic peak hours: {str(e)}")
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
 @app.route('/api/v1/analytics/geospatial/clustering', methods=['GET'])
