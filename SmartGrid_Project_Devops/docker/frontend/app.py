@@ -451,6 +451,8 @@ def get_kosovo_consumption_historical():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    logger.info("Starting Frontend Web Application on port 8080")
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    port = int(os.getenv('PORT', 8080))
+    host = os.getenv('HOST', '0.0.0.0')
+    logger.info(f"Starting Frontend Web Application on {host}:{port}")
+    app.run(host=host, port=port, debug=True)
 
