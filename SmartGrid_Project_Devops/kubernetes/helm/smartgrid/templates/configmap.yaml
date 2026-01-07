@@ -7,6 +7,34 @@ metadata:
     {{- include "smartgrid.labels" . | nindent 4 }}
 data:
   KAFKA_BROKER: {{ .Values.infrastructure.kafka.broker | quote }}
+  KAFKA_TOPIC_SENSOR_DATA: {{ .Values.infrastructure.kafka.topicSensorData | quote }}
+  KAFKA_TOPIC_METER_READINGS: {{ .Values.infrastructure.kafka.topicMeterReadings | quote }}
+  KAFKA_TOPIC_ALERTS: {{ .Values.infrastructure.kafka.topicAlerts | quote }}
+  KAFKA_TOPIC_NOTIFICATIONS: {{ .Values.infrastructure.kafka.topicNotifications | quote }}
+  KAFKA_TOPIC_WEATHER: {{ .Values.infrastructure.kafka.topicWeather | quote }}
+  KAFKA_GROUP_ID: {{ .Values.infrastructure.kafka.groupId | quote }}
+  POSTGRES_HOST: {{ .Values.infrastructure.postgres.host | quote }}
+  POSTGRES_PORT: {{ .Values.infrastructure.postgres.port | quote }}
+  POSTGRES_DB: {{ .Values.infrastructure.postgres.database | quote }}
+  POSTGRES_USER: {{ .Values.infrastructure.postgres.user | quote }}
   SCHEMA_REGISTRY_URL: {{ .Values.infrastructure.schemaRegistry.url | quote }}
   CONSUL_HOST: {{ .Values.infrastructure.consul.host | quote }}
   CONSUL_PORT: {{ .Values.infrastructure.consul.port | quote }}
+  MLFLOW_TRACKING_URI: {{ .Values.infrastructure.mlflow.trackingUri | quote }}
+  DATA_INGESTION_SERVICE: "http://{{ .Release.Name }}-data-ingestion-service:{{ .Values.services.dataIngestion.service.port }}"
+  DATA_PROCESSING_SERVICE: "http://{{ .Release.Name }}-data-processing-service:{{ .Values.services.dataProcessing.service.port }}"
+  ANALYTICS_SERVICE: "http://{{ .Release.Name }}-analytics-service:{{ .Values.services.analytics.service.port }}"
+  NOTIFICATION_SERVICE: "http://{{ .Release.Name }}-notification-service:{{ .Values.services.notification.service.port }}"
+  USER_MANAGEMENT_SERVICE: "http://{{ .Release.Name }}-user-management-service:{{ .Values.services.userManagement.service.port }}"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-secrets
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "smartgrid.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: {{ .Values.secrets.postgresPassword | quote }}
+  JWT_SECRET: {{ .Values.secrets.jwtSecret | quote }}

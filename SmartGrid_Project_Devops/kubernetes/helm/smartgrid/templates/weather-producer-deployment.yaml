@@ -1,0 +1,105 @@
+{{- if .Values.services.weatherProducer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-weather-producer-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "smartgrid.labels" . | nindent 4 }}
+    component: weather-producer
+spec:
+  replicas: {{ .Values.services.weatherProducer.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "smartgrid.selectorLabels" . | nindent 6 }}
+      component: weather-producer
+  template:
+    metadata:
+      labels:
+        {{- include "smartgrid.selectorLabels" . | nindent 8 }}
+        component: weather-producer
+    spec:
+      containers:
+      - name: weather-producer
+        image: "{{ .Values.global.imageRegistry }}{{ .Values.services.weatherProducer.image.repository }}:{{ .Values.services.weatherProducer.image.tag }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        ports:
+        - containerPort: {{ .Values.services.weatherProducer.service.port }}
+          name: http
+        env:
+        - name: KAFKA_BROKER
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: KAFKA_BROKER
+        - name: KAFKA_TOPIC_WEATHER
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: KAFKA_TOPIC_WEATHER
+        - name: SCHEMA_REGISTRY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: SCHEMA_REGISTRY_URL
+        - name: CONSUL_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: CONSUL_HOST
+        - name: CONSUL_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: CONSUL_PORT
+        - name: USE_CONSUL
+          value: "true"
+        - name: USE_SCHEMA_REGISTRY
+          value: "true"
+        - name: WEATHER_UPDATE_INTERVAL
+          value: "60"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.services.weatherProducer.service.port }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.services.weatherProducer.service.port }}
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-weather-producer-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "smartgrid.labels" . | nindent 4 }}
+    component: weather-producer
+spec:
+  type: {{ .Values.services.weatherProducer.service.type }}
+  ports:
+  - port: {{ .Values.services.weatherProducer.service.port }}
+    targetPort: {{ .Values.services.weatherProducer.service.port }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "smartgrid.selectorLabels" . | nindent 4 }}
+    component: weather-producer
+{{- end }}
+

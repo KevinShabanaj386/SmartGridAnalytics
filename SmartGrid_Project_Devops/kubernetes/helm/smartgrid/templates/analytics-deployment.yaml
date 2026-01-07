@@ -1,0 +1,117 @@
+{{- if .Values.services.analytics.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-analytics-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "smartgrid.labels" . | nindent 4 }}
+    component: analytics
+spec:
+  replicas: {{ .Values.services.analytics.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "smartgrid.selectorLabels" . | nindent 6 }}
+      component: analytics
+  template:
+    metadata:
+      labels:
+        {{- include "smartgrid.selectorLabels" . | nindent 8 }}
+        component: analytics
+    spec:
+      containers:
+      - name: analytics
+        image: "{{ .Values.global.imageRegistry }}{{ .Values.services.analytics.image.repository }}:{{ .Values.services.analytics.image.tag }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        ports:
+        - containerPort: {{ .Values.services.analytics.service.port }}
+          name: http
+        env:
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: POSTGRES_HOST
+        - name: POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: POSTGRES_PORT
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-secrets
+              key: POSTGRES_PASSWORD
+        - name: MLFLOW_TRACKING_URI
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: MLFLOW_TRACKING_URI
+        - name: CONSUL_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: CONSUL_HOST
+        - name: CONSUL_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: CONSUL_PORT
+        - name: USE_CONSUL
+          value: "true"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.services.analytics.service.port }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.services.analytics.service.port }}
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-analytics-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "smartgrid.labels" . | nindent 4 }}
+    component: analytics
+spec:
+  type: {{ .Values.services.analytics.service.type }}
+  ports:
+  - port: {{ .Values.services.analytics.service.port }}
+    targetPort: {{ .Values.services.analytics.service.port }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "smartgrid.selectorLabels" . | nindent 4 }}
+    component: analytics
+{{- end }}
+

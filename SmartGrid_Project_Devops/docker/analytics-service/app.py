@@ -19,16 +19,29 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize Redis caching
+# Input Validation (100% SECURITY)
 try:
-    from cache import init_redis, cache_result
-    if init_redis():
-        logger.info("Redis caching enabled")
+    from input_validation import (
+        validate_uuid, validate_date, validate_numeric, validate_integer, sanitize_string
+    )
+    INPUT_VALIDATION_AVAILABLE = True
+except ImportError:
+    INPUT_VALIDATION_AVAILABLE = False
+    logger.warning("Input validation module not available")
+
+# Initialize Redis dhe Memcached caching
+try:
+    from cache import init_redis, init_memcached, cache_result
+    redis_enabled = init_redis()
+    memcached_enabled = init_memcached()
+    
+    if redis_enabled or memcached_enabled:
+        logger.info(f"Caching enabled - Redis: {redis_enabled}, Memcached: {memcached_enabled}")
     else:
-        logger.warning("Redis caching disabled - continuing without cache")
+        logger.warning("Caching disabled - continuing without cache")
         cache_result = lambda ttl=None: lambda f: f  # No-op decorator
 except Exception as e:
-    logger.warning(f"Could not initialize Redis: {e}")
+    logger.warning(f"Could not initialize caching: {e}")
     cache_result = lambda ttl=None: lambda f: f  # No-op decorator
 
 # Consul Config Management
@@ -105,7 +118,23 @@ def get_sensor_statistics():
     try:
         sensor_id = request.args.get('sensor_id')
         sensor_type = request.args.get('sensor_type')
-        hours = int(request.args.get('hours', 24))
+        hours_str = request.args.get('hours', '24')
+        
+        # SECURITY FIX: Input validation (100% SECURITY)
+        if INPUT_VALIDATION_AVAILABLE:
+            # Validon hours (integer, 1-168)
+            hours_valid, hours_error = validate_integer(hours_str, min_value=1, max_value=168)
+            if not hours_valid:
+                return jsonify({'error': hours_error}), 400
+            hours = int(hours_str)
+            
+            # Sanitize sensor_id dhe sensor_type
+            if sensor_id:
+                sensor_id = sanitize_string(sensor_id, max_length=100)
+            if sensor_type:
+                sensor_type = sanitize_string(sensor_type, max_length=50)
+        else:
+            hours = int(hours_str)
         
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)

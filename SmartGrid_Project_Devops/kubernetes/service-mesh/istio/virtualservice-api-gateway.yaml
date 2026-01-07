@@ -1,0 +1,61 @@
+# Istio VirtualService për API Gateway
+# VirtualService përcakton routing rules për traffic
+
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: api-gateway
+  namespace: smartgrid
+spec:
+  hosts:
+  - api.smartgrid.local
+  - api-gateway.smartgrid.svc.cluster.local
+  gateways:
+  - smartgrid-gateway
+  - mesh
+  http:
+  # Route për health checks
+  - match:
+    - uri:
+        prefix: /health
+    route:
+    - destination:
+        host: api-gateway
+        port:
+          number: 5000
+  
+  # Route për API endpoints
+  - match:
+    - uri:
+        prefix: /api
+    route:
+    - destination:
+        host: api-gateway
+        port:
+          number: 5000
+      weight: 100
+    # Retry policy
+    retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+    # Timeout
+    timeout: 30s
+    # Fault injection për testing
+    # fault:
+    #   delay:
+    #     percentage:
+    #       value: 10
+    #     fixedDelay: 5s
+  
+  # Route për frontend
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: frontend
+        port:
+          number: 8080
+      weight: 100
+

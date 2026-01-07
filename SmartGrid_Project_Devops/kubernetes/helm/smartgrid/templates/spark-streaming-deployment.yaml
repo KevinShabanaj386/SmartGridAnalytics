@@ -1,0 +1,126 @@
+{{- if .Values.services.sparkStreaming.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-spark-streaming-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "smartgrid.labels" . | nindent 4 }}
+    component: spark-streaming
+spec:
+  replicas: {{ .Values.services.sparkStreaming.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "smartgrid.selectorLabels" . | nindent 6 }}
+      component: spark-streaming
+  template:
+    metadata:
+      labels:
+        {{- include "smartgrid.selectorLabels" . | nindent 8 }}
+        component: spark-streaming
+    spec:
+      containers:
+      - name: spark-streaming
+        image: "{{ .Values.global.imageRegistry }}{{ .Values.services.sparkStreaming.image.repository }}:{{ .Values.services.sparkStreaming.image.tag }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        ports:
+        - containerPort: {{ .Values.services.sparkStreaming.service.port }}
+          name: http
+        env:
+        - name: KAFKA_BROKER
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: KAFKA_BROKER
+        - name: KAFKA_TOPIC_SENSOR_DATA
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: KAFKA_TOPIC_SENSOR_DATA
+        - name: KAFKA_TOPIC_METER_READINGS
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: KAFKA_TOPIC_METER_READINGS
+        - name: KAFKA_TOPIC_WEATHER
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: KAFKA_TOPIC_WEATHER
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: POSTGRES_HOST
+        - name: POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: POSTGRES_PORT
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-secrets
+              key: POSTGRES_PASSWORD
+        - name: SCHEMA_REGISTRY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: SCHEMA_REGISTRY_URL
+        - name: CONSUL_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: CONSUL_HOST
+        - name: CONSUL_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: CONSUL_PORT
+        - name: USE_CONSUL
+          value: "true"
+        - name: USE_SCHEMA_REGISTRY
+          value: "true"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-spark-streaming-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "smartgrid.labels" . | nindent 4 }}
+    component: spark-streaming
+spec:
+  type: {{ .Values.services.sparkStreaming.service.type }}
+  ports:
+  - port: {{ .Values.services.sparkStreaming.service.port }}
+    targetPort: {{ .Values.services.sparkStreaming.service.port }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "smartgrid.selectorLabels" . | nindent 4 }}
+    component: spark-streaming
+{{- end }}
+

@@ -1,0 +1,88 @@
+{
+  "expectation_suite_name": "meter_readings_suite",
+  "data_asset_type": "Dataset",
+  "expectations": [
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "meter_id"
+      },
+      "meta": {
+        "notes": "Meter ID nuk duhet të jetë null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "customer_id"
+      },
+      "meta": {
+        "notes": "Customer ID nuk duhet të jetë null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "reading"
+      },
+      "meta": {
+        "notes": "Reading nuk duhet të jetë null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "timestamp"
+      },
+      "meta": {
+        "notes": "Timestamp nuk duhet të jetë null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "reading",
+        "min_value": 0,
+        "max_value": 1000000
+      },
+      "meta": {
+        "notes": "Reading duhet të jetë pozitive dhe në rangun e pritur (0-1M kWh)"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "unit",
+        "value_set": ["kWh"]
+      },
+      "meta": {
+        "notes": "Unit duhet të jetë 'kWh'"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_of_type",
+      "kwargs": {
+        "column": "timestamp",
+        "type_": "datetime64[ns]"
+      },
+      "meta": {
+        "notes": "Timestamp duhet të jetë datetime"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_increasing",
+      "kwargs": {
+        "column": "reading",
+        "strictly": false
+      },
+      "meta": {
+        "notes": "Reading duhet të jetë në rritje (meter readings nuk duhet të zvogëlohen)"
+      }
+    }
+  ],
+  "meta": {
+    "great_expectations_version": "0.18.0",
+    "notes": "Expectation suite për meter readings validation"
+  }
+}
+

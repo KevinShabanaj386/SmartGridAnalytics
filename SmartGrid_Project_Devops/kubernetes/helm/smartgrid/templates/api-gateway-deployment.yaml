@@ -32,10 +32,41 @@ spec:
         - containerPort: {{ .Values.services.apiGateway.service.port }}
           name: http
         env:
+        - name: DATA_INGESTION_SERVICE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: DATA_INGESTION_SERVICE
+        - name: DATA_PROCESSING_SERVICE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: DATA_PROCESSING_SERVICE
+        - name: ANALYTICS_SERVICE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: ANALYTICS_SERVICE
+        - name: NOTIFICATION_SERVICE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: NOTIFICATION_SERVICE
+        - name: USER_MANAGEMENT_SERVICE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: USER_MANAGEMENT_SERVICE
         - name: CONSUL_HOST
-          value: {{ .Values.infrastructure.consul.host | quote }}
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: CONSUL_HOST
         - name: CONSUL_PORT
-          value: {{ .Values.infrastructure.consul.port | quote }}
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: CONSUL_PORT
         - name: USE_CONSUL
           value: "true"
         livenessProbe:

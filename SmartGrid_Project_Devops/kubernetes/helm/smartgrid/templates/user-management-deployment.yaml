@@ -1,0 +1,116 @@
+{{- if .Values.services.userManagement.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-user-management-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "smartgrid.labels" . | nindent 4 }}
+    component: user-management
+spec:
+  replicas: {{ .Values.services.userManagement.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "smartgrid.selectorLabels" . | nindent 6 }}
+      component: user-management
+  template:
+    metadata:
+      labels:
+        {{- include "smartgrid.selectorLabels" . | nindent 8 }}
+        component: user-management
+    spec:
+      containers:
+      - name: user-management
+        image: "{{ .Values.global.imageRegistry }}{{ .Values.services.userManagement.image.repository }}:{{ .Values.services.userManagement.image.tag }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        ports:
+        - containerPort: {{ .Values.services.userManagement.service.port }}
+          name: http
+        env:
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: POSTGRES_HOST
+        - name: POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: POSTGRES_PORT
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-secrets
+              key: POSTGRES_PASSWORD
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-secrets
+              key: JWT_SECRET
+        - name: CONSUL_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: CONSUL_HOST
+        - name: CONSUL_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: CONSUL_PORT
+        - name: USE_CONSUL
+          value: "true"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.services.userManagement.service.port }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.services.userManagement.service.port }}
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-user-management-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "smartgrid.labels" . | nindent 4 }}
+    component: user-management
+spec:
+  type: {{ .Values.services.userManagement.service.type }}
+  ports:
+  - port: {{ .Values.services.userManagement.service.port }}
+    targetPort: {{ .Values.services.userManagement.service.port }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "smartgrid.selectorLabels" . | nindent 4 }}
+    component: user-management
+{{- end }}
+

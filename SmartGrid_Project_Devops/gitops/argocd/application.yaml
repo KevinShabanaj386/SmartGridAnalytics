@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: smartgrid-analytics
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/KevinShabanaj386/SmartGridAnalytics.git
+    targetRevision: main
+    path: SmartGrid_Project_Devops/kubernetes/helm/smartgrid
+    helm:
+      valueFiles:
+        - values.yaml
+      # Optional: Override values
+      # values: |
+      #   services:
+      #     apiGateway:
+      #       replicaCount: 5
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: smartgrid
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+

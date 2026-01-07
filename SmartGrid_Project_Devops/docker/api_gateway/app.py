@@ -15,6 +15,14 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Setup Swagger UI
+try:
+    from swagger_ui import setup_swagger_ui
+    if setup_swagger_ui(app):
+        logger.info("Swagger UI initialized at /api-docs")
+except Exception as e:
+    logger.warning(f"Could not initialize Swagger UI: {e}")
+
 # Setup OpenTelemetry tracing
 try:
     from tracing import setup_tracing
@@ -135,17 +143,36 @@ def verify_jwt_token(token: Optional[str]) -> bool:
         logger.error(f"Error verifying JWT token: {str(e)}")
         return False
 
+# Zero Trust Architecture
+try:
+    from zero_trust import require_zero_trust, get_zero_trust_stats
+    ZERO_TRUST_AVAILABLE = True
+    logger.info("Zero Trust Architecture enabled")
+except ImportError:
+    ZERO_TRUST_AVAILABLE = False
+    logger.warning("Zero Trust module not available")
+    def require_zero_trust(f):
+        return f
+    def get_zero_trust_stats():
+        return {'enabled': False}
+
 def require_auth(f):
     """Decorator për kërkesat që kërkojnë autentikim"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         # Përjashto health checks dhe auth endpoints
-        if request.path in ['/health', '/api/v1/auth/login', '/api/v1/auth/register']:
+        if request.path in ['/health', '/api/v1/auth/login', '/api/v1/auth/register', '/metrics']:
             return f(*args, **kwargs)
         
-        token = request.headers.get('Authorization')
-        if not token or not verify_jwt_token(token):
-            return jsonify({'error': 'Unauthorized'}), 401
+        # Përdor Zero Trust nëse është i disponueshëm
+        if ZERO_TRUST_AVAILABLE:
+            # Zero Trust do të verifikojë token dhe behavior
+            return require_zero_trust(f)(*args, **kwargs)
+        else:
+            # Fallback në basic JWT verification
+            token = request.headers.get('Authorization')
+            if not token or not verify_jwt_token(token):
+                return jsonify({'error': 'Unauthorized'}), 401
         
         return f(*args, **kwargs)
     
@@ -239,16 +266,45 @@ def health_check():
                 'error': str(e)
             }
     
+    healthy_count = sum(1 for s in services_health.values() if s.get('status') == 'healthy')
+    unhealthy_count = len(services_health) - healthy_count
+    overall_status = 'healthy' if unhealthy_count == 0 else 'degraded' if healthy_count > 0 else 'unhealthy'
+    
     return jsonify({
-        'status': 'healthy',
+        'status': overall_status,
         'service': 'api-gateway',
         'timestamp': datetime.utcnow().isoformat(),
         'services': services_health,
+        'summary': {
+            'total': len(SERVICE_FALLBACKS),
+            'healthy': healthy_count,
+            'unhealthy': unhealthy_count
+        },
         'circuit_breakers': {
             name: state['status'] 
             for name, state in circuit_breaker_state.items()
         }
-    }), 200
+    }), 200 if overall_status == 'healthy' else 503 if overall_status == 'unhealthy' else 200
+
+@app.route('/metrics', methods=['GET'])
+def metrics():
+    """Prometheus metrics endpoint"""
+    try:
+        from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+        return Response(
+            generate_latest(),
+            mimetype=CONTENT_TYPE_LATEST
+        )
+    except ImportError:
+        # Fallback nëse prometheus_client nuk është i instaluar
+        return jsonify({
+            'requests_total': 0,
+            'requests_duration_seconds': 0,
+            'circuit_breaker_state': {
+                name: state['status']
+                for name, state in circuit_breaker_state.items()
+            }
+        }), 200
 
 # Routing për Data Ingestion Service
 @app.route('/api/v1/ingest/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE'])

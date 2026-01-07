@@ -1,0 +1,55 @@
+{
+  "trigger": {
+    "schedule": {
+      "interval": "1m"
+    }
+  },
+  "input": {
+    "search": {
+      "request": {
+        "indices": ["smartgrid-threats-*"],
+        "body": {
+          "query": {
+            "bool": {
+              "must": [
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-1m"
+                    }
+                  }
+                },
+                {
+                  "terms": {
+                    "threat_severity": ["high", "critical"]
+                  }
+                }
+              ]
+            }
+          },
+          "size": 100
+        }
+      }
+    }
+  },
+  "condition": {
+    "compare": {
+      "ctx.payload.hits.total.value": {
+        "gt": 0
+      }
+    }
+  },
+  "actions": {
+    "send_alert": {
+      "webhook": {
+        "scheme": "http",
+        "host": "smartgrid-notification-service",
+        "port": 5005,
+        "method": "post",
+        "path": "/api/v1/notifications/send",
+        "body": "{\"type\":\"webhook\",\"recipient\":\"security-team@smartgrid.local\",\"subject\":\"SIEM Threat Alert\",\"message\":\"{{ctx.payload.hits.total.value}} high/critical threat(s) detected in the last minute\",\"priority\":\"critical\",\"metadata\":{\"threats\":{{#toJson}}ctx.payload.hits.hits{{/toJson}}}}"
+      }
+    }
+  }
+}
+

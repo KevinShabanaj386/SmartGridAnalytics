@@ -1,0 +1,108 @@
+{{- if .Values.services.notification.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-notification-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "smartgrid.labels" . | nindent 4 }}
+    component: notification
+spec:
+  replicas: {{ .Values.services.notification.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "smartgrid.selectorLabels" . | nindent 6 }}
+      component: notification
+  template:
+    metadata:
+      labels:
+        {{- include "smartgrid.selectorLabels" . | nindent 8 }}
+        component: notification
+    spec:
+      containers:
+      - name: notification
+        image: "{{ .Values.global.imageRegistry }}{{ .Values.services.notification.image.repository }}:{{ .Values.services.notification.image.tag }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        ports:
+        - containerPort: {{ .Values.services.notification.service.port }}
+          name: http
+        env:
+        - name: KAFKA_BROKER
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: KAFKA_BROKER
+        - name: KAFKA_TOPIC_ALERTS
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: KAFKA_TOPIC_ALERTS
+        - name: KAFKA_TOPIC_NOTIFICATIONS
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: KAFKA_TOPIC_NOTIFICATIONS
+        - name: SCHEMA_REGISTRY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: SCHEMA_REGISTRY_URL
+        - name: CONSUL_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: CONSUL_HOST
+        - name: CONSUL_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-config
+              key: CONSUL_PORT
+        - name: USE_CONSUL
+          value: "true"
+        - name: USE_SCHEMA_REGISTRY
+          value: "true"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.services.notification.service.port }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.services.notification.service.port }}
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-notification-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "smartgrid.labels" . | nindent 4 }}
+    component: notification
+spec:
+  type: {{ .Values.services.notification.service.type }}
+  ports:
+  - port: {{ .Values.services.notification.service.port }}
+    targetPort: {{ .Values.services.notification.service.port }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "smartgrid.selectorLabels" . | nindent 4 }}
+    component: notification
+{{- end }}
+

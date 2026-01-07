@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: smartgrid
+  namespace: argocd
+spec:
+  description: Smart Grid Analytics Platform
+  
+  # Source repositories
+  sourceRepos:
+    - 'https://github.com/KevinShabanaj386/SmartGridAnalytics.git'
+    - '*'
+  
+  # Destination clusters and namespaces
+  destinations:
+    - namespace: smartgrid
+      server: https://kubernetes.default.svc
+    - namespace: '*'
+      server: https://kubernetes.default.svc
+  
+  # Cluster resource whitelist
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  # Namespace resource whitelist
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  # Roles for RBAC
+  roles:
+    - name: admin
+      description: Admin role for Smart Grid Analytics
+      policies:
+        - p, proj:smartgrid:admin, applications, *, smartgrid/*, allow
+        - p, proj:smartgrid:admin, repositories, *, *, allow
+      groups:
+        - smartgrid-admins
+    
+    - name: developer
+      description: Developer role for Smart Grid Analytics
+      policies:
+        - p, proj:smartgrid:developer, applications, get, smartgrid/*, allow
+        - p, proj:smartgrid:developer, applications, sync, smartgrid/*, allow
+      groups:
+        - smartgrid-developers
+

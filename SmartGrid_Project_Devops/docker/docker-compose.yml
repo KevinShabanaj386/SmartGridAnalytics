@@ -121,12 +121,14 @@ services:
       - ../elk/logstash/config:/usr/share/logstash/config
     ports:
       - "5044:5044"
+      - "5000:5000"  # TCP input për logs
       - "9600:9600"
     environment:
-      - "LS_JAVA_OPTS=-Xmx256m -Xms256m"
+      - "LS_JAVA_OPTS=-Xmx512m -Xms512m"
     depends_on:
       - elasticsearch
-    command: logstash -f /usr/share/logstash/pipeline/logstash.conf
+    # Përdor pipelines.yml për multiple pipelines (main + threat-detection)
+    command: logstash --path.settings=/usr/share/logstash/config --path.config=/usr/share/logstash/pipeline
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.11.0
@@ -203,6 +205,29 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
 
+  # Memcached për distributed caching (kërkesë e profesorit)
+  memcached:
+    image: memcached:1.6-alpine
+    container_name: smartgrid-memcached
+    ports:
+      - "11211:11211"
+    command: ["-m", "256"]  # 256MB memory
+    restart: unless-stopped
+
+  # MongoDB për hybrid storage - audit logs dhe metadata (kërkesë e profesorit)
+  mongodb:
+    image: mongo:7.0
+    container_name: smartgrid-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: smartgrid
+      MONGO_INITDB_ROOT_PASSWORD: smartgrid123
+      MONGO_INITDB_DATABASE: smartgrid_audit
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+
   # Mikrosherbimet
   data-ingestion-service:
     build: ./data-ingestion-service
@@ -248,10 +273,14 @@ services:
       - POSTGRES_PASSWORD=smartgrid123
       - REDIS_HOST=smartgrid-redis
       - REDIS_PORT=6379
+      - MEMCACHED_HOST=smartgrid-memcached
+      - MEMCACHED_PORT=11211
+      - USE_MEMCACHED=true
       - MLFLOW_TRACKING_URI=http://smartgrid-mlflow:5000
     depends_on:
       - postgres
       - redis
+      - memcached
       - mlflow
     restart: unless-stopped
 
@@ -280,8 +309,15 @@ services:
       - POSTGRES_USER=smartgrid
       - POSTGRES_PASSWORD=smartgrid123
       - JWT_SECRET=your-secret-key-change-in-production
+      - MONGODB_HOST=smartgrid-mongodb
+      - MONGODB_PORT=27017
+      - MONGODB_DB=smartgrid_audit
+      - MONGODB_USER=smartgrid
+      - MONGODB_PASSWORD=smartgrid123
+      - USE_MONGODB_AUDIT=true
     depends_on:
       - postgres
+      - mongodb
     restart: unless-stopped
 
   api-gateway:
@@ -413,3 +449,4 @@ volumes:
   sonarqube_data:
   sonarqube_extensions:
   sonarqube_logs:
+  mongodb_data:

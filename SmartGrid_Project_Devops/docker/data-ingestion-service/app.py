@@ -14,6 +14,17 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Input Validation
+try:
+    from input_validation import (
+        validate_sensor_id, validate_sensor_type, validate_meter_id,
+        validate_customer_id, validate_numeric, validate_latitude, validate_longitude
+    )
+    INPUT_VALIDATION_AVAILABLE = True
+except ImportError:
+    INPUT_VALIDATION_AVAILABLE = False
+    logger.warning("Input validation module not available")
+
 # Consul Config Management
 try:
     from consul_config import get_config

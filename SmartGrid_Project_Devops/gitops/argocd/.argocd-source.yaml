@@ -1,0 +1,24 @@
+# ArgoCD Source Configuration
+# Ky file përdoret për të konfiguruar source settings për ArgoCD
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+data:
+  # Repository credentials (nëse private repo)
+  # repositories: |
+  #   - url: https://github.com/KevinShabanaj386/SmartGridAnalytics.git
+  #     type: git
+  #     name: smartgrid-repo
+  
+  # Application settings
+  application.instanceLabelKey: argocd.argoproj.io/instance
+  
+  # Helm settings
+  helm.values: |
+    # Default values për të gjitha Helm charts
+    global:
+      imagePullPolicy: IfNotPresent
+

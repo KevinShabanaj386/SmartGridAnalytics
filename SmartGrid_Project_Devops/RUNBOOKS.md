@@ -139,6 +139,57 @@ Ky dokument përmban runbooks dhe playbooks për menaxhimin e incidenteve në Sm
 
 **Recovery**: Redis do të rindërtojë cache automatikisht
 
+### 6. Memcached Cache Failure
+
+**Symptom**: Write-through cache nuk funksionon, performance degradation
+
+**Steps**:
+1. Kontrollo Memcached:
+   ```bash
+   docker ps | grep memcached
+   docker exec smartgrid-memcached memcached-tool localhost:11211 stats
+   ```
+
+2. Restart Memcached:
+   ```bash
+   docker restart smartgrid-memcached
+   ```
+
+3. Kontrollo connectivity nga analytics service:
+   ```bash
+   docker logs smartgrid-analytics --tail 50 | grep -i memcached
+   ```
+
+**Recovery**: Memcached do të rindërtojë cache automatikisht, Redis vazhdon si fallback
+
+### 7. MongoDB Connection Failure
+
+**Symptom**: Audit logs nuk ruhen në MongoDB
+
+**Steps**:
+1. Kontrollo MongoDB:
+   ```bash
+   docker ps | grep mongodb
+   docker logs smartgrid-mongodb --tail 50
+   ```
+
+2. Test connection:
+   ```bash
+   docker exec smartgrid-mongodb mongosh -u smartgrid -p smartgrid123 --authenticationDatabase admin
+   ```
+
+3. Restart MongoDB:
+   ```bash
+   docker restart smartgrid-mongodb
+   ```
+
+4. Kontrollo audit logs:
+   ```bash
+   docker exec smartgrid-mongodb mongosh -u smartgrid -p smartgrid123 --authenticationDatabase admin --eval "use smartgrid_audit; db.audit_logs.count()"
+   ```
+
+**Recovery**: PostgreSQL vazhdon si fallback për audit logs
+
 ## Playbooks
 
 ### Playbook 1: Full System Recovery
