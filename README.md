@@ -194,6 +194,42 @@ Ky projekt përmbush kërkesat teknike për implementimin e projekteve në Siste
 
 **Total Implementation**: **~89%** e kërkesave të sigurisë
 
+## 🌐 Web Data Integration me AI për Kosovën
+
+### ✅ Kosovo Weather Data Collector
+- **Real weather data** për qytetet e Kosovës (Prishtinë, Prizren, Pejë, Gjilan, Mitrovicë)
+- **OpenWeatherMap API** integration për të dhëna reale
+- **AI-powered validation** dhe enrichment
+- **Automatic collection** çdo orë
+- **Fallback** në simulated data nëse API fails
+- **Vendndodhja**: `docker/kosovo-weather-collector/`
+
+### Features:
+- **5 cities monitored**: Prishtinë, Prizren, Pejë, Gjilan, Mitrovicë
+- **Real-time data**: Temperature, humidity, pressure, wind speed
+- **AI validation**: Data quality checks dhe anomaly detection
+- **Kafka integration**: Automatic streaming në existing pipeline
+- **Scheduled collection**: Configurable interval (default: 1 orë)
+
+### Endpoints:
+- `GET /health` - Health check
+- `POST /api/v1/collect` - Manual collection trigger
+- `GET /api/v1/cities` - List all monitored cities
+
+### Setup:
+1. **Get OpenWeatherMap API key**: https://openweathermap.org/api
+2. **Set environment variable**: `OPENWEATHER_API_KEY=your_api_key`
+3. **Start service**: `docker-compose up kosovo-weather-collector`
+
+### Next Steps:
+- **Energy Price Collector**: Scrape çmime nga KOSTT, ERO websites
+- **Consumption Data Collector**: Collect consumption data nga KOSTT dashboard
+- **PDF Parser me AI**: Extract data nga PDF reports (tariffs, statistics)
+- **Social Media Monitoring**: Monitor Twitter/X për power outages
+- **News Article Analysis**: Scrape news rreth energjisë në Kosovë
+
+**Dokumentimi i plotë**: `SmartGrid_Project_Devops/WEB_DATA_INTEGRATION_KOSOVO.md`
+
 ## 📋 Ndryshimet e Fundit - Çfarë Është Shtuar dhe Edituar
 
 ### 📁 File-a të Reja të Shtuara
