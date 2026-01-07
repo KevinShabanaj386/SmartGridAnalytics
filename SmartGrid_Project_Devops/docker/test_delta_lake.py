@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 def test_delta_lake_imports():
     """Test që Delta Lake modules importohen saktë"""
     try:
+        # Try importing from data-processing-service directory
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'data-processing-service'))
         from delta_lake_storage import (
             get_spark_session,
             store_sensor_data_delta,
@@ -34,6 +36,7 @@ def test_delta_lake_imports():
 def test_delta_lake_functions():
     """Test që Delta Lake functions janë të disponueshme"""
     try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'data-processing-service'))
         from delta_lake_storage import (
             get_sensor_data_schema,
             get_meter_readings_schema,
@@ -51,6 +54,7 @@ def test_delta_lake_functions():
 def test_spark_session_creation():
     """Test që Spark session mund të krijohet (nëse Spark është i disponueshëm)"""
     try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'data-processing-service'))
         from delta_lake_storage import get_spark_session
         spark = get_spark_session()
         if spark:
