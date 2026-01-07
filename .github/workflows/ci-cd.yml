@@ -335,7 +335,7 @@ jobs:
         fi
     
     - name: Configure kubectl
-      if: secrets.KUBECONFIG != ''
+      if: ${{ secrets.KUBECONFIG != '' }}
       run: |
         echo "=== Configuring kubectl ==="
         echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
@@ -358,7 +358,7 @@ jobs:
         fi
     
     - name: Create namespace (if needed)
-      if: secrets.KUBECONFIG != ''
+      if: ${{ secrets.KUBECONFIG != '' }}
       env:
         KUBECONFIG: ${{ github.workspace }}/kubeconfig
       run: |
@@ -376,7 +376,7 @@ jobs:
         fi
     
     - name: Deploy në Kubernetes
-      if: secrets.KUBECONFIG != ''
+      if: ${{ secrets.KUBECONFIG != '' }}
       env:
         KUBECONFIG: ${{ github.workspace }}/kubeconfig
       run: |
@@ -414,7 +414,7 @@ jobs:
         echo "✅ Delta Lake storage configured"
     
     - name: Verify deployment
-      if: secrets.KUBECONFIG != ''
+      if: ${{ secrets.KUBECONFIG != '' }}
       env:
         KUBECONFIG: ${{ github.workspace }}/kubeconfig
       run: |
@@ -471,9 +471,9 @@ jobs:
         echo "✅ Deployment verification completed"
     
     - name: Skip deployment (no KUBECONFIG)
-      if: secrets.KUBECONFIG == ''
+      if: ${{ secrets.KUBECONFIG == '' }}
       run: |
-        echo "ℹ️ KUBECONFIG secret not configured. Skipping actual deployment."
+        echo "KUBECONFIG secret is not set. Skipping Kubernetes deployment."
         echo "✅ Manifest validation passed. Deployment would proceed if KUBECONFIG was available."
 
   # Job për security scanning
