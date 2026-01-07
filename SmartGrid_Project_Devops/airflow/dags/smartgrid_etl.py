@@ -131,35 +131,130 @@ def load_to_warehouse(**context):
     logger.info(f"Loaded {len(transformed_data)} records to warehouse")
 
 def validate_data_quality(**context):
-    """Validon cilësinë e të dhënave me Great Expectations (simulim)"""
-    transformed_data = context['ti'].xcom_pull(key='transformed_data', task_ids='transform_data')
-    
-    if not transformed_data:
-        raise ValueError("No data to validate")
-    
-    # Rregulla të thjeshta validimi (në prodhim do të përdoret Great Expectations)
-    validation_errors = []
-    
-    for record in transformed_data:
-        # Kontrollo që vlerat janë në rangun e pritur
-        if record['sensor_type'] == 'voltage':
-            if record['avg_value'] < 100 or record['avg_value'] > 400:
-                validation_errors.append(f"Voltage out of range: {record['avg_value']}V")
+    """Validon cilësinë e të dhënave me Great Expectations (100% INTEGRIM)"""
+    try:
+        # Import Great Expectations helper
+        import sys
+        import os
+        # Shto path për data-quality module
+        data_quality_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data-quality')
+        if data_quality_path not in sys.path:
+            sys.path.insert(0, data_quality_path)
         
-        elif record['sensor_type'] == 'current':
-            if record['avg_value'] < 0 or record['avg_value'] > 1000:
-                validation_errors.append(f"Current out of range: {record['avg_value']}A")
+        from great_expectations_helper import (
+            validate_sensor_data_with_ge,
+            validate_meter_readings_with_ge,
+            generate_data_docs
+        )
         
-        elif record['sensor_type'] == 'power':
-            if record['avg_value'] < 0:
-                validation_errors.append(f"Power cannot be negative: {record['avg_value']}W")
-    
-    if validation_errors:
-        logger.error(f"Data quality validation failed: {validation_errors}")
-        raise ValueError(f"Data quality validation failed: {len(validation_errors)} errors")
-    
-    logger.info("Data quality validation passed")
-    return True
+        # Merr PostgreSQL connection nga Airflow connection
+        postgres_hook = PostgresHook(postgres_conn_id='smartgrid_postgres')
+        conn = postgres_hook.get_conn()
+        db_config = {
+            'host': conn.info.host,
+            'port': str(conn.info.port),
+            'database': conn.info.dbname,
+            'user': conn.info.user,
+            'password': conn.info.password
+        }
+        conn.close()
+        
+        # Validim për sensor data
+        logger.info("Validating sensor data with Great Expectations...")
+        sensor_validation = validate_sensor_data_with_ge(
+            query="""
+                SELECT 
+                    sensor_id,
+                    sensor_type,
+                    value,
+                    timestamp,
+                    latitude,
+                    longitude
+                FROM sensor_data
+                WHERE timestamp >= NOW() - INTERVAL '1 hour'
+            """,
+            expectation_suite_name="sensor_data_suite",
+            **db_config
+        )
+        
+        # Validim për meter readings
+        logger.info("Validating meter readings with Great Expectations...")
+        meter_validation = validate_meter_readings_with_ge(
+            query="""
+                SELECT 
+                    meter_id,
+                    customer_id,
+                    reading,
+                    unit,
+                    timestamp
+                FROM meter_readings
+                WHERE timestamp >= NOW() - INTERVAL '1 hour'
+            """,
+            expectation_suite_name="meter_readings_suite",
+            **db_config
+        )
+        
+        # Gjenero Data Docs
+        sensor_docs_path = generate_data_docs(sensor_validation, output_dir="/tmp/ge_data_docs/sensor")
+        meter_docs_path = generate_data_docs(meter_validation, output_dir="/tmp/ge_data_docs/meter")
+        
+        # Ruaj rezultatet në XCom
+        context['ti'].xcom_push(key='sensor_validation', value=sensor_validation)
+        context['ti'].xcom_push(key='meter_validation', value=meter_validation)
+        context['ti'].xcom_push(key='sensor_docs_path', value=sensor_docs_path)
+        context['ti'].xcom_push(key='meter_docs_path', value=meter_docs_path)
+        
+        # Kontrollo nëse validimi ka dështuar
+        if not sensor_validation.get('success', False):
+            logger.error(f"Sensor data validation failed: {sensor_validation.get('statistics', {})}")
+            raise ValueError(f"Sensor data validation failed: {sensor_validation.get('statistics', {}).get('unsuccessful_expectations', 0)} expectations failed")
+        
+        if not meter_validation.get('success', False):
+            logger.error(f"Meter readings validation failed: {meter_validation.get('statistics', {})}")
+            raise ValueError(f"Meter readings validation failed: {meter_validation.get('statistics', {}).get('unsuccessful_expectations', 0)} expectations failed")
+        
+        logger.info("✅ Data quality validation passed with Great Expectations")
+        logger.info(f"Sensor data quality score: {sensor_validation.get('data_quality_score', 0)}%")
+        logger.info(f"Meter readings quality score: {meter_validation.get('data_quality_score', 0)}%")
+        
+        return {
+            'success': True,
+            'sensor_validation': sensor_validation,
+            'meter_validation': meter_validation,
+            'sensor_docs_path': sensor_docs_path,
+            'meter_docs_path': meter_docs_path
+        }
+        
+    except ImportError as e:
+        logger.warning(f"Great Expectations not available, falling back to simple validation: {e}")
+        # Fallback në validim të thjeshtë
+        transformed_data = context['ti'].xcom_pull(key='transformed_data', task_ids='transform_data')
+        
+        if not transformed_data:
+            raise ValueError("No data to validate")
+        
+        validation_errors = []
+        for record in transformed_data:
+            if record['sensor_type'] == 'voltage':
+                if record['avg_value'] < 100 or record['avg_value'] > 400:
+                    validation_errors.append(f"Voltage out of range: {record['avg_value']}V")
+            elif record['sensor_type'] == 'current':
+                if record['avg_value'] < 0 or record['avg_value'] > 1000:
+                    validation_errors.append(f"Current out of range: {record['avg_value']}A")
+            elif record['sensor_type'] == 'power':
+                if record['avg_value'] < 0:
+                    validation_errors.append(f"Power cannot be negative: {record['avg_value']}W")
+        
+        if validation_errors:
+            logger.error(f"Data quality validation failed: {validation_errors}")
+            raise ValueError(f"Data quality validation failed: {len(validation_errors)} errors")
+        
+        logger.info("Data quality validation passed (simple validation)")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error in data quality validation: {str(e)}")
+        raise
 
 # Task-et e DAG
 extract_task = PythonOperator(

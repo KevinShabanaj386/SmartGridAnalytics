@@ -1,0 +1,102 @@
+{
+  "expectation_suite_name": "sensor_data_suite",
+  "data_asset_type": "Dataset",
+  "expectations": [
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "sensor_id"
+      },
+      "meta": {
+        "notes": "Sensor ID nuk duhet të jetë null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "sensor_type"
+      },
+      "meta": {
+        "notes": "Sensor type nuk duhet të jetë null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "value"
+      },
+      "meta": {
+        "notes": "Value nuk duhet të jetë null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "timestamp"
+      },
+      "meta": {
+        "notes": "Timestamp nuk duhet të jetë null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "sensor_type",
+        "value_set": ["voltage", "current", "power", "frequency"]
+      },
+      "meta": {
+        "notes": "Sensor type duhet të jetë në listën e pritur"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "value",
+        "min_value": 0,
+        "max_value": 10000
+      },
+      "meta": {
+        "notes": "Value duhet të jetë pozitive dhe në rangun e pritur"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "latitude",
+        "min_value": -90,
+        "max_value": 90,
+        "mostly": 0.95
+      },
+      "meta": {
+        "notes": "Latitude duhet të jetë në rangun e pritur (-90, 90)"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "longitude",
+        "min_value": -180,
+        "max_value": 180,
+        "mostly": 0.95
+      },
+      "meta": {
+        "notes": "Longitude duhet të jetë në rangun e pritur (-180, 180)"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_of_type",
+      "kwargs": {
+        "column": "timestamp",
+        "type_": "datetime64[ns]"
+      },
+      "meta": {
+        "notes": "Timestamp duhet të jetë datetime"
+      }
+    }
+  ],
+  "meta": {
+    "great_expectations_version": "0.18.0",
+    "notes": "Expectation suite për sensor data validation"
+  }
+}
+
