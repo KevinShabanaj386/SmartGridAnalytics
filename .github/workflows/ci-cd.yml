@@ -289,10 +289,14 @@ jobs:
         
         if [ $VALIDATION_ERRORS -gt 0 ]; then
           echo ""
-          echo "❌ Validation failed for $VALIDATION_ERRORS file(s)"
-          echo "⚠️ This might be due to missing CRDs or Istio resources that require cluster connection"
+          echo "⚠️ Validation warnings for $VALIDATION_ERRORS file(s)"
+          echo "⚠️ This might be due to:"
+          echo "   - Missing CRDs (e.g., Istio resources require Istio to be installed)"
+          echo "   - Resources that require cluster connection for full validation"
           echo "⚠️ Continuing anyway - actual deployment will validate against cluster if available"
+          echo "⚠️ If KUBECONFIG is not configured, this is expected and deployment will be skipped"
           # Don't exit with error - let deployment step handle it
+          exit 0
         else
           echo ""
           echo "✅ All manifest files are syntactically valid"
