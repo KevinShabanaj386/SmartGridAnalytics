@@ -1,0 +1,182 @@
+# Envoy Proxy Configuration për Layer 7 Load Balancing
+# Alternative për NGINX me advanced traffic management
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: envoy-config
+  namespace: smartgrid
+data:
+  envoy.yaml: |
+    admin:
+      address:
+        socket_address:
+          protocol: TCP
+          address: 0.0.0.0
+          port_value: 9901
+    
+    static_resources:
+      listeners:
+      - name: listener_0
+        address:
+          socket_address:
+            protocol: TCP
+            address: 0.0.0.0
+            port_value: 8080
+        filter_chains:
+        - filters:
+          - name: envoy.filters.network.http_connection_manager
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+              stat_prefix: ingress_http
+              access_log:
+              - name: envoy.access_loggers.stdout
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+              
+              # Intelligent Routing: Path-Based
+              route_config:
+                name: local_route
+                virtual_hosts:
+                - name: api_gateway
+                  domains: ["api.smartgrid.local"]
+                  
+                  # Route për analytics
+                  routes:
+                  - match:
+                      path: "/api/v1/analytics"
+                    route:
+                      cluster: analytics_service
+                      timeout: 30s
+                      retry_policy:
+                        retry_on: "5xx,reset,connect-failure,refused-stream"
+                        num_retries: 3
+                        per_try_timeout: 5s
+                  
+                  # Route për data processing
+                  - match:
+                      path: "/api/v1/data"
+                    route:
+                      cluster: data_processing_service
+                  
+                  # Intelligent Routing: Header-Based
+                  - match:
+                      path: "/api/v1/features"
+                      headers:
+                      - name: "x-feature-flag"
+                        exact_match: "new_analytics"
+                    route:
+                      cluster: analytics_service_v2
+                  
+                  # Intelligent Routing: Content-Based (via Lua filter)
+                  - match:
+                      path: "/api/v1/data"
+                      headers:
+                      - name: "content-type"
+                        exact_match: "application/json"
+                    route:
+                      cluster: data_processing_service_json
+                  
+                  # Default route
+                  - match:
+                      prefix: "/api/"
+                    route:
+                      cluster: api_gateway_service
+                  
+                  # CORS
+                  cors:
+                    allow_origin_string_match:
+                    - prefix: "*"
+                    allow_methods: "GET, POST, PUT, DELETE, OPTIONS"
+                    allow_headers: "authorization, content-type"
+                    max_age: "86400"
+              
+              http_filters:
+              - name: envoy.filters.http.router
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+      
+      clusters:
+      # API Gateway Cluster
+      - name: api_gateway_service
+        connect_timeout: 30s
+        type: STRICT_DNS
+        lb_policy: LEAST_REQUEST  # Ose: ROUND_ROBIN, RANDOM, RING_HASH
+        load_assignment:
+          cluster_name: api_gateway_service
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: api-gateway-1
+                    port_value: 5000
+            - endpoint:
+                address:
+                  socket_address:
+                    address: api-gateway-2
+                    port_value: 5000
+            - endpoint:
+                address:
+                  socket_address:
+                    address: api-gateway-3
+                    port_value: 5000
+        
+        # Health checks
+        health_checks:
+        - timeout: 5s
+          interval: 10s
+          unhealthy_threshold: 3
+          healthy_threshold: 2
+          http_health_check:
+            path: /health
+        
+        # Circuit breaker
+        circuit_breakers:
+          thresholds:
+          - priority: DEFAULT
+            max_connections: 100
+            max_pending_requests: 50
+            max_requests: 200
+            max_retries: 3
+      
+      # Analytics Service Cluster
+      - name: analytics_service
+        connect_timeout: 30s
+        type: STRICT_DNS
+        lb_policy: LEAST_REQUEST
+        load_assignment:
+          cluster_name: analytics_service
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: analytics-service-1
+                    port_value: 5002
+            - endpoint:
+                address:
+                  socket_address:
+                    address: analytics-service-2
+                    port_value: 5002
+      
+      # Data Processing Service Cluster
+      - name: data_processing_service
+        connect_timeout: 30s
+        type: STRICT_DNS
+        lb_policy: ROUND_ROBIN
+        load_assignment:
+          cluster_name: data_processing_service
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: data-processing-service-1
+                    port_value: 5001
+            - endpoint:
+                address:
+                  socket_address:
+                    address: data-processing-service-2
+                    port_value: 5001
+

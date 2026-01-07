@@ -1,0 +1,165 @@
+# NGINX Configuration për Layer 7 Load Balancing
+# Intelligent routing bazuar në path, headers, dhe content
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: smartgrid
+data:
+  nginx.conf: |
+    # NGINX Configuration për Smart Grid Analytics
+    # Layer 7 Load Balancing me Intelligent Routing
+    
+    upstream api_gateway_backend {
+        # Load balancing algorithm
+        least_conn;  # Ose: round_robin, ip_hash, hash $request_uri
+        
+        # Health checks
+        server api-gateway-1:5000 max_fails=3 fail_timeout=30s;
+        server api-gateway-2:5000 max_fails=3 fail_timeout=30s;
+        server api-gateway-3:5000 max_fails=3 fail_timeout=30s backup;
+        
+        # Keepalive connections
+        keepalive 32;
+    }
+    
+    upstream analytics_backend {
+        least_conn;
+        server analytics-service-1:5002;
+        server analytics-service-2:5002;
+        server analytics-service-3:5002;
+        keepalive 32;
+    }
+    
+    upstream data_processing_backend {
+        least_conn;
+        server data-processing-service-1:5001;
+        server data-processing-service-2:5001;
+        keepalive 32;
+    }
+    
+    # Rate limiting zones
+    limit_req_zone $binary_remote_addr zone=api_limit:10m rate=100r/s;
+    limit_req_zone $binary_remote_addr zone=analytics_limit:10m rate=50r/s;
+    
+    server {
+        listen 80;
+        server_name api.smartgrid.local;
+        
+        # SSL redirect
+        return 301 https://$server_name$request_uri;
+    }
+    
+    server {
+        listen 443 ssl http2;
+        server_name api.smartgrid.local;
+        
+        # SSL certificates
+        ssl_certificate /etc/nginx/ssl/tls.crt;
+        ssl_certificate_key /etc/nginx/ssl/tls.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+        
+        # Client body size
+        client_max_body_size 10m;
+        
+        # Timeouts
+        proxy_connect_timeout 30s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+        
+        # Intelligent Routing: Path-Based
+        location /api/v1/analytics {
+            limit_req zone=analytics_limit burst=20 nodelay;
+            
+            # Header-based routing
+            if ($http_x_user_type = "premium") {
+                proxy_pass http://analytics_backend_premium;
+            }
+            
+            proxy_pass http://analytics_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # Caching
+            proxy_cache analytics_cache;
+            proxy_cache_valid 200 5m;
+            proxy_cache_key "$scheme$request_method$host$request_uri";
+            add_header X-Cache-Status $upstream_cache_status;
+        }
+        
+        # Intelligent Routing: Content-Based
+        location /api/v1/data {
+            # Route bazuar në content type
+            if ($content_type ~* "application/json") {
+                proxy_pass http://data_processing_backend;
+            }
+            
+            # Route bazuar në request body size
+            if ($request_body_size > 1048576) {  # > 1MB
+                proxy_pass http://data_processing_backend_large;
+            }
+            
+            limit_req zone=api_limit burst=50 nodelay;
+            
+            proxy_pass http://api_gateway_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+        
+        # Intelligent Routing: Header-Based (A/B Testing)
+        location /api/v1/features {
+            # Route bazuar në custom header
+            if ($http_x_feature_flag = "new_analytics") {
+                proxy_pass http://analytics_backend_v2;
+            }
+            
+            proxy_pass http://analytics_backend;
+        }
+        
+        # Default API Gateway route
+        location /api/ {
+            limit_req zone=api_limit burst=50 nodelay;
+            
+            proxy_pass http://api_gateway_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # Retry logic
+            proxy_next_upstream error timeout http_502 http_503;
+            proxy_next_upstream_tries 3;
+            proxy_next_upstream_timeout 10s;
+        }
+        
+        # Health check endpoint
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+        
+        # Metrics endpoint
+        location /metrics {
+            access_log off;
+            proxy_pass http://api_gateway_backend;
+        }
+    }
+    
+    # Cache zones
+    proxy_cache_path /var/cache/nginx/analytics 
+        levels=1:2 
+        keys_zone=analytics_cache:10m 
+        max_size=1g 
+        inactive=60m 
+        use_temp_path=off;
+    
+    # Logging
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log warn;
+
