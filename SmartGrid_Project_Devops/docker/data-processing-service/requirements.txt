@@ -1,7 +1,7 @@
 kafka-python==2.0.2
 psycopg2-binary==2.9.9
 python-dotenv==1.0.0
-python-consul2==1.1.0
+python-consul2==0.1.5
 confluent-kafka[avro]==2.3.0
 requests==2.31.0
 cassandra-driver==3.29.0
