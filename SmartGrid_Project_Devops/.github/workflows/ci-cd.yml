@@ -159,6 +159,7 @@ jobs:
           # CRITICAL FIX: Use --validate=false to prevent OpenAPI schema download errors
           # This flag prevents kubectl from trying to connect to localhost:8080
           # when the cluster connection isn't fully established or during validation
+          # Without this flag, kubectl tries to download OpenAPI schema and fails with connection refused
           kubectl apply --validate=false -f SmartGrid_Project_Devops/kubernetes/ -n smartgrid
       
       - name: Verify deployment
