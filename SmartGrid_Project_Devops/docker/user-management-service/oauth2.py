@@ -39,6 +39,31 @@ OAUTH2_CLIENTS = {
         'client_secret': 'mobile-app-secret-change-in-production',
         'redirect_uris': ['smartgrid://callback'],
         'grant_types': ['authorization_code', 'refresh_token']
+    },
+    # OAuth2 Client Credentials Flow - për service-to-service authentication (100% SECURITY)
+    'data-ingestion-service': {
+        'client_id': 'smartgrid-data-ingestion',
+        'client_secret': os.getenv('OAUTH2_DATA_INGESTION_SECRET', 'data-ingestion-secret-change-in-production'),
+        'grant_types': ['client_credentials'],
+        'scope': 'ingest:write'
+    },
+    'data-processing-service': {
+        'client_id': 'smartgrid-data-processing',
+        'client_secret': os.getenv('OAUTH2_DATA_PROCESSING_SECRET', 'data-processing-secret-change-in-production'),
+        'grant_types': ['client_credentials'],
+        'scope': 'process:write'
+    },
+    'analytics-service': {
+        'client_id': 'smartgrid-analytics',
+        'client_secret': os.getenv('OAUTH2_ANALYTICS_SECRET', 'analytics-secret-change-in-production'),
+        'grant_types': ['client_credentials'],
+        'scope': 'analytics:read analytics:write'
+    },
+    'notification-service': {
+        'client_id': 'smartgrid-notification',
+        'client_secret': os.getenv('OAUTH2_NOTIFICATION_SECRET', 'notification-secret-change-in-production'),
+        'grant_types': ['client_credentials'],
+        'scope': 'notify:write'
     }
 }
 
@@ -222,4 +247,38 @@ def introspect_token(token: str) -> Optional[Dict]:
         return {
             'active': False
         }
+
+def generate_client_credentials_token(client_id: str, scope: str = '') -> Optional[Dict[str, str]]:
+    """
+    OAuth2 Client Credentials Flow (RFC 6749 Section 4.4)
+    Gjeneron access token për service-to-service authentication
+    """
+    try:
+        jwt_secret = get_jwt_secret()
+        
+        # Merr scope nga client configuration nëse nuk është dhënë
+        if not scope and client_id in OAUTH2_CLIENTS:
+            scope = OAUTH2_CLIENTS[client_id].get('scope', 'read write')
+        
+        # Access token (1 orë për service-to-service)
+        access_token_payload = {
+            'sub': client_id,  # Për client_credentials, sub është client_id
+            'client_id': client_id,
+            'scope': scope,
+            'grant_type': 'client_credentials',
+            'exp': datetime.utcnow() + timedelta(hours=1),
+            'iat': datetime.utcnow(),
+            'token_type': 'Bearer'
+        }
+        access_token = jwt.encode(access_token_payload, jwt_secret, algorithm='HS256')
+        
+        return {
+            'access_token': access_token,
+            'token_type': 'Bearer',
+            'expires_in': 3600,
+            'scope': scope
+        }
+    except Exception as e:
+        logger.error(f"Error generating client credentials token: {str(e)}")
+        return None
 

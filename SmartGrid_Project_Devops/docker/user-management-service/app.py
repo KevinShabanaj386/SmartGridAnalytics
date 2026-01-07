@@ -23,7 +23,8 @@ try:
         generate_access_token, validate_access_token, refresh_access_token,
         validate_client_credentials, OAUTH2_CLIENTS,
         generate_code_verifier, generate_code_challenge, validate_code_challenge,
-        store_code_verifier, get_code_verifier, introspect_token
+        store_code_verifier, get_code_verifier, introspect_token,
+        generate_client_credentials_token  # OAuth2 Client Credentials Flow (100% SECURITY)
     )
     OAUTH2_AVAILABLE = True
 except ImportError:
@@ -555,6 +556,28 @@ if OAUTH2_AVAILABLE:
                 tokens = refresh_access_token(refresh_token, client_id)
                 if not tokens:
                     return jsonify({'error': 'Invalid or expired refresh_token'}), 400
+                
+                return jsonify(tokens), 200
+            
+            elif grant_type == 'client_credentials':
+                # OAuth2 Client Credentials Flow - për service-to-service authentication (100% SECURITY)
+                scope = data.get('scope', '')
+                
+                # Merr scope nga client configuration nëse nuk është dhënë
+                if not scope and client_id in OAUTH2_CLIENTS:
+                    scope = OAUTH2_CLIENTS[client_id].get('scope', 'read write')
+                
+                # Kontrollo nëse client suporton client_credentials grant type
+                if client_id not in OAUTH2_CLIENTS:
+                    return jsonify({'error': 'Invalid client_id'}), 400
+                
+                client = OAUTH2_CLIENTS[client_id]
+                if 'client_credentials' not in client.get('grant_types', []):
+                    return jsonify({'error': 'Client does not support client_credentials grant type'}), 400
+                
+                tokens = generate_client_credentials_token(client_id, scope)
+                if not tokens:
+                    return jsonify({'error': 'Failed to generate token'}), 500
                 
                 return jsonify(tokens), 200
             else:
