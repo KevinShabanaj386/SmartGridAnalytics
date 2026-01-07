@@ -1,0 +1,50 @@
+# Istio Gateway për Smart Grid Analytics
+# Gateway përcakton portet dhe protokollet që Istio do të përdorë për traffic
+
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: smartgrid-gateway
+  namespace: smartgrid
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  # HTTP traffic për API Gateway
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - api.smartgrid.local
+    - "*.smartgrid.local"
+    # Redirect HTTP në HTTPS
+    tls:
+      httpsRedirect: true
+  
+  # HTTPS traffic
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    hosts:
+    - api.smartgrid.local
+    - "*.smartgrid.local"
+    tls:
+      mode: SIMPLE
+      credentialName: smartgrid-tls-cert
+    # CORS configuration
+    corsPolicy:
+      allowOrigins:
+      - "*"
+      allowMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+      allowHeaders:
+      - "*"
+      allowCredentials: false
+      maxAge: "24h"
+

@@ -1,0 +1,25 @@
+# Istio ServiceEntry për external services
+# ServiceEntry lejon Istio të menaxhojë traffic për external services
+
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: external-services
+  namespace: smartgrid
+spec:
+  hosts:
+  # External APIs
+  - api.github.com
+  - registry-1.docker.io
+  # External databases (nëse ka)
+  # - external-db.example.com
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  - number: 80
+    name: http
+    protocol: HTTP
+  location: MESH_EXTERNAL
+  resolution: DNS
+

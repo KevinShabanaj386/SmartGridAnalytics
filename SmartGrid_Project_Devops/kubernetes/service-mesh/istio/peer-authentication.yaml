@@ -1,0 +1,30 @@
+# Istio PeerAuthentication për mTLS
+# PeerAuthentication përcakton authentication policies midis services
+
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: smartgrid
+spec:
+  # mTLS mode: STRICT, PERMISSIVE, DISABLE
+  mtls:
+    mode: STRICT  # Kërkon mTLS për të gjitha komunikimet
+  # Ose për services specifike:
+  # selector:
+  #   matchLabels:
+  #     app: api-gateway
+  # mtls:
+  #   mode: STRICT
+
+---
+# PeerAuthentication për mesh-wide (optional)
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: PERMISSIVE  # Lejon edhe non-mTLS traffic për migration
+
