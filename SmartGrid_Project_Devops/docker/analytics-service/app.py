@@ -938,6 +938,310 @@ def get_consumption_trends():
         logger.error(f"Error getting consumption trends: {str(e)}")
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
+@app.route('/api/v1/analytics/consumption/trends/monthly', methods=['GET'])
+def get_monthly_trends():
+    """
+    Kthen trendet mujore të konsumit
+    Query params: customer_id, months (default: 12)
+    """
+    try:
+        customer_id = request.args.get('customer_id')
+        months = int(request.args.get('months', 12))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        query = """
+            SELECT 
+                DATE_TRUNC('month', timestamp) as month,
+                SUM(value) as total_consumption,
+                AVG(value) as avg_reading,
+                COUNT(*) as reading_count,
+                MIN(value) as min_consumption,
+                MAX(value) as max_consumption
+            FROM sensor_data
+            WHERE timestamp >= NOW() - INTERVAL '%s months'
+            AND sensor_type IN ('power', 'voltage', 'current')
+        """
+        params = [months]
+        
+        if customer_id:
+            query += " AND customer_id = %s"
+            params.append(customer_id)
+        
+        query += " GROUP BY DATE_TRUNC('month', timestamp) ORDER BY month"
+        
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        trends = []
+        from decimal import Decimal
+        for row in results:
+            trends.append({
+                'month': row['month'].isoformat() if hasattr(row['month'], 'isoformat') else str(row['month']),
+                'total_consumption': float(row['total_consumption']) if isinstance(row['total_consumption'], (Decimal, int, float)) else 0.0,
+                'avg_reading': float(row['avg_reading']) if isinstance(row['avg_reading'], (Decimal, int, float)) else 0.0,
+                'min_consumption': float(row['min_consumption']) if isinstance(row['min_consumption'], (Decimal, int, float)) else 0.0,
+                'max_consumption': float(row['max_consumption']) if isinstance(row['max_consumption'], (Decimal, int, float)) else 0.0,
+                'reading_count': int(row['reading_count']) if isinstance(row['reading_count'], (Decimal, int)) else 0
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'trends': trends,
+            'period_months': months
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting monthly trends: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/consumption/trends/seasonal', methods=['GET'])
+def get_seasonal_trends():
+    """
+    Kthen trendet sezonale të konsumit
+    Query params: customer_id, years (default: 2)
+    """
+    try:
+        customer_id = request.args.get('customer_id')
+        years = int(request.args.get('years', 2))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        query = """
+            SELECT 
+                CASE 
+                    WHEN EXTRACT(MONTH FROM timestamp) IN (12, 1, 2) THEN 'Winter'
+                    WHEN EXTRACT(MONTH FROM timestamp) IN (3, 4, 5) THEN 'Spring'
+                    WHEN EXTRACT(MONTH FROM timestamp) IN (6, 7, 8) THEN 'Summer'
+                    ELSE 'Fall'
+                END as season,
+                EXTRACT(YEAR FROM timestamp) as year,
+                SUM(value) as total_consumption,
+                AVG(value) as avg_reading,
+                COUNT(*) as reading_count
+            FROM sensor_data
+            WHERE timestamp >= NOW() - INTERVAL '%s years'
+            AND sensor_type IN ('power', 'voltage', 'current')
+        """
+        params = [years]
+        
+        if customer_id:
+            query += " AND customer_id = %s"
+            params.append(customer_id)
+        
+        query += " GROUP BY season, year ORDER BY year, season"
+        
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        trends = []
+        from decimal import Decimal
+        for row in results:
+            trends.append({
+                'season': row['season'],
+                'year': int(row['year']) if isinstance(row['year'], (Decimal, int, float)) else 0,
+                'total_consumption': float(row['total_consumption']) if isinstance(row['total_consumption'], (Decimal, int, float)) else 0.0,
+                'avg_reading': float(row['avg_reading']) if isinstance(row['avg_reading'], (Decimal, int, float)) else 0.0,
+                'reading_count': int(row['reading_count']) if isinstance(row['reading_count'], (Decimal, int)) else 0
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'trends': trends,
+            'period_years': years
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting seasonal trends: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/consumption/year-comparison', methods=['GET'])
+def get_year_comparison():
+    """
+    Krahasim i konsumit ndërmjet viteve të ndryshme
+    Query params: customer_id, years (default: 2) - numri i viteve për të krahasuar
+    """
+    try:
+        customer_id = request.args.get('customer_id')
+        years = int(request.args.get('years', 2))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        query = """
+            SELECT 
+                EXTRACT(YEAR FROM timestamp) as year,
+                SUM(value) as total_consumption,
+                AVG(value) as avg_consumption,
+                MIN(value) as min_consumption,
+                MAX(value) as max_consumption,
+                COUNT(*) as reading_count
+            FROM sensor_data
+            WHERE timestamp >= NOW() - INTERVAL '%s years'
+            AND sensor_type IN ('power', 'voltage', 'current')
+        """
+        params = [years]
+        
+        if customer_id:
+            query += " AND customer_id = %s"
+            params.append(customer_id)
+        
+        query += " GROUP BY EXTRACT(YEAR FROM timestamp) ORDER BY year"
+        
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        comparisons = []
+        from decimal import Decimal
+        previous_year_consumption = None
+        
+        for row in results:
+            year = int(row['year']) if isinstance(row['year'], (Decimal, int, float)) else 0
+            total_consumption = float(row['total_consumption']) if isinstance(row['total_consumption'], (Decimal, int, float)) else 0.0
+            
+            # Llogaritje e ndryshimit në përqindje
+            change_percent = None
+            if previous_year_consumption is not None and previous_year_consumption > 0:
+                change_percent = ((total_consumption - previous_year_consumption) / previous_year_consumption) * 100
+            
+            comparisons.append({
+                'year': year,
+                'total_consumption': total_consumption,
+                'avg_consumption': float(row['avg_consumption']) if isinstance(row['avg_consumption'], (Decimal, int, float)) else 0.0,
+                'min_consumption': float(row['min_consumption']) if isinstance(row['min_consumption'], (Decimal, int, float)) else 0.0,
+                'max_consumption': float(row['max_consumption']) if isinstance(row['max_consumption'], (Decimal, int, float)) else 0.0,
+                'reading_count': int(row['reading_count']) if isinstance(row['reading_count'], (Decimal, int)) else 0,
+                'change_from_previous_year_percent': round(change_percent, 2) if change_percent is not None else None
+            })
+            
+            previous_year_consumption = total_consumption
+        
+        return jsonify({
+            'status': 'success',
+            'comparisons': comparisons,
+            'years_compared': years
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting year comparison: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/consumption/growth-analysis', methods=['GET'])
+def get_growth_analysis():
+    """
+    Analizë e rritjes ose uljes së konsumit në periudha afatgjata
+    Query params: customer_id, days (default: 365) - periudha për analizë
+    """
+    try:
+        customer_id = request.args.get('customer_id')
+        days = int(request.args.get('days', 365))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Merr të dhënat për periudhën e specifikuar
+        query = """
+            SELECT 
+                DATE_TRUNC('day', timestamp) as day,
+                SUM(value) as total_consumption
+            FROM sensor_data
+            WHERE timestamp >= NOW() - INTERVAL '%s days'
+            AND sensor_type IN ('power', 'voltage', 'current')
+        """
+        params = [days]
+        
+        if customer_id:
+            query += " AND customer_id = %s"
+            params.append(customer_id)
+        
+        query += " GROUP BY DATE_TRUNC('day', timestamp) ORDER BY day"
+        
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        from decimal import Decimal
+        consumptions = []
+        for row in results:
+            consumptions.append({
+                'date': row['day'].isoformat() if hasattr(row['day'], 'isoformat') else str(row['day']),
+                'consumption': float(row['total_consumption']) if isinstance(row['total_consumption'], (Decimal, int, float)) else 0.0
+            })
+        
+        if len(consumptions) < 2:
+            return jsonify({
+                'status': 'success',
+                'message': 'Insufficient data for growth analysis',
+                'data_points': len(consumptions)
+            }), 200
+        
+        # Llogaritje e trendit
+        first_half = consumptions[:len(consumptions)//2]
+        second_half = consumptions[len(consumptions)//2:]
+        
+        first_half_avg = sum(c['consumption'] for c in first_half) / len(first_half) if first_half else 0
+        second_half_avg = sum(c['consumption'] for c in second_half) / len(second_half) if second_half else 0
+        
+        # Llogaritje e përqindjes së ndryshimit
+        if first_half_avg > 0:
+            growth_percent = ((second_half_avg - first_half_avg) / first_half_avg) * 100
+        else:
+            growth_percent = 0
+        
+        # Përcaktimi i trendit
+        if growth_percent > 5:
+            trend = "increasing"
+            trend_description = f"Konsumi po rritet me {abs(growth_percent):.2f}%"
+        elif growth_percent < -5:
+            trend = "decreasing"
+            trend_description = f"Konsumi po ulet me {abs(growth_percent):.2f}%"
+        else:
+            trend = "stable"
+            trend_description = f"Konsumi është relativisht i qëndrueshëm (ndryshim {growth_percent:.2f}%)"
+        
+        # Llogaritje e rritjes mesatare ditore
+        if len(consumptions) > 1:
+            first_consumption = consumptions[0]['consumption']
+            last_consumption = consumptions[-1]['consumption']
+            days_span = len(consumptions)
+            if days_span > 0 and first_consumption > 0:
+                daily_growth_rate = ((last_consumption - first_consumption) / first_consumption) / days_span * 100
+            else:
+                daily_growth_rate = 0
+        else:
+            daily_growth_rate = 0
+        
+        return jsonify({
+            'status': 'success',
+            'trend': trend,
+            'trend_description': trend_description,
+            'growth_percent': round(growth_percent, 2),
+            'daily_growth_rate_percent': round(daily_growth_rate, 4),
+            'first_half_avg_consumption': round(first_half_avg, 2),
+            'second_half_avg_consumption': round(second_half_avg, 2),
+            'period_days': days,
+            'data_points': len(consumptions),
+            'first_date': consumptions[0]['date'] if consumptions else None,
+            'last_date': consumptions[-1]['date'] if consumptions else None
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting growth analysis: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
 @app.route('/api/v1/analytics/geospatial/clustering', methods=['GET'])
 def get_sensor_clustering():
     """
