@@ -262,6 +262,11 @@ jobs:
         validate_file() {
           local f="$1"
           if [ -f "$f" ]; then
+            # Skip non-Kubernetes YAMLs (no apiVersion field)
+            if ! grep -q "apiVersion:" "$f"; then
+              echo "Skipping (no apiVersion): $f"
+              return
+            fi
             echo "Validating: $f"
             if ! kubectl apply --dry-run=client --validate=false -f "$f" > /dev/null 2>&1; then
               echo "  ❌ Validation failed for: $f"
@@ -289,7 +294,7 @@ jobs:
 
         if [ $VALIDATION_ERRORS -gt 0 ]; then
           echo ""
-          echo "⚠️ Validation failed for $VALIDATION_ERRORS file(s).""
+          echo "⚠️ Validation failed for $VALIDATION_ERRORS file(s)."
           exit 1
         fi
 
@@ -396,4 +401,3 @@ jobs:
       with:
         sarif_file: 'trivy-results.sarif'
       continue-on-error: true
-
