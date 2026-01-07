@@ -1,0 +1,81 @@
+# Pod Disruption Budget (PDB) për auto-healing dhe availability
+# Siguron që minimum pods janë gjithmonë available
+
+---
+# API Gateway PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-gateway-pdb
+  namespace: smartgrid
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+
+---
+# Data Ingestion PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: data-ingestion-pdb
+  namespace: smartgrid
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: data-ingestion
+
+---
+# Data Processing PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: data-processing-pdb
+  namespace: smartgrid
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: data-processing
+
+---
+# Analytics PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: analytics-pdb
+  namespace: smartgrid
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: analytics
+
+---
+# Notification PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: notification-pdb
+  namespace: smartgrid
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: notification
+
+---
+# User Management PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: user-management-pdb
+  namespace: smartgrid
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: user-management
+

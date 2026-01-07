@@ -1,0 +1,79 @@
+# PostgreSQL Database për User Management Service (Database-per-Service Pattern)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: user-management-postgres
+  namespace: smartgrid
+spec:
+  serviceName: user-management-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-management-postgres
+  template:
+    metadata:
+      labels:
+        app: user-management-postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgis/postgis:15-3.4
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: user-management-db-secret
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: user-management-db-secret
+              key: password
+        - name: POSTGRES_DB
+          value: user_management_db
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: user-management-db-data
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+  volumeClaimTemplates:
+  - metadata:
+      name: user-management-db-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-management-postgres
+  namespace: smartgrid
+spec:
+  clusterIP: None
+  selector:
+    app: user-management-postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: user-management-db-secret
+  namespace: smartgrid
+type: Opaque
+stringData:
+  username: smartgrid
+  password: smartgrid123
+

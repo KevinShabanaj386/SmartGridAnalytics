@@ -181,7 +181,7 @@ def require_auth(f):
 def proxy_request(service_name: str, path: str, method: str = 'GET', 
                   data: Optional[Dict] = None, retries: int = 3) -> Response:
     """
-    Proxy kërkesën te shërbimi i specifikuar me retry logic
+    Proxy kërkesën te shërbimi i specifikuar me retry logic dhe circuit breaker
     """
     if service_name not in SERVICE_FALLBACKS:
         return jsonify({'error': f'Service {service_name} not found'}), 404
@@ -204,20 +204,22 @@ def proxy_request(service_name: str, path: str, method: str = 'GET',
         if key.lower() not in ['host', 'content-length']:
             headers[key] = value
     
-    # Retry logic
+    # Enhanced retry logic me exponential backoff
     last_exception = None
     for attempt in range(retries):
         try:
+            timeout = 5 + (attempt * 2)  # Increasing timeout për retries
+            
             if method == 'GET':
-                response = requests.get(url, headers=headers, params=request.args, timeout=5)
+                response = requests.get(url, headers=headers, params=request.args, timeout=timeout)
             elif method == 'POST':
                 response = requests.post(url, headers=headers, json=data or request.get_json(), 
-                                        params=request.args, timeout=5)
+                                        params=request.args, timeout=timeout)
             elif method == 'PUT':
                 response = requests.put(url, headers=headers, json=data or request.get_json(), 
-                                      params=request.args, timeout=5)
+                                      params=request.args, timeout=timeout)
             elif method == 'DELETE':
-                response = requests.delete(url, headers=headers, params=request.args, timeout=5)
+                response = requests.delete(url, headers=headers, params=request.args, timeout=timeout)
             else:
                 return jsonify({'error': f'Method {method} not supported'}), 405
             
@@ -231,11 +233,16 @@ def proxy_request(service_name: str, path: str, method: str = 'GET',
                 headers=dict(response.headers)
             )
             
+        except requests.exceptions.Timeout as e:
+            last_exception = e
+            logger.warning(f"Request to {service_name} timed out (attempt {attempt + 1}/{retries})")
+            if attempt < retries - 1:
+                time.sleep(0.5 * (2 ** attempt))  # Exponential backoff
         except requests.exceptions.RequestException as e:
             last_exception = e
             logger.warning(f"Request to {service_name} failed (attempt {attempt + 1}/{retries}): {str(e)}")
             if attempt < retries - 1:
-                time.sleep(0.5 * (attempt + 1))  # Exponential backoff
+                time.sleep(0.5 * (2 ** attempt))  # Exponential backoff
     
     # Të gjitha tentativat dështuan
     record_failure(service_name)

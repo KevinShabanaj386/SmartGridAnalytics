@@ -1,0 +1,133 @@
+# Helm Values për Resilience Configuration
+# Override default values për production resilience
+
+global:
+  resilience:
+    circuitBreaker:
+      failureThreshold: 5
+      recoveryTimeout: 60
+      successThreshold: 2
+    retry:
+      maxRetries: 3
+      initialDelay: 1.0
+      exponentialBase: 2.0
+    timeout:
+      default: 30s
+      critical: 60s
+      healthCheck: 5s
+
+apiGateway:
+  replicas: 3
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilization: 70
+    targetMemoryUtilization: 80
+
+dataIngestion:
+  replicas: 2
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+
+dataProcessing:
+  replicas: 3
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilization: 70
+
+analytics:
+  replicas: 2
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+
+notification:
+  replicas: 2
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+
+userManagement:
+  replicas: 2
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+
+# Database-per-Service Configuration
+databases:
+  dataProcessing:
+    enabled: true
+    storage: 50Gi
+    replicas: 1
+  analytics:
+    enabled: true
+    storage: 20Gi
+    replicas: 1
+  userManagement:
+    enabled: true
+    storage: 10Gi
+    replicas: 1
+
+# Service Mesh Configuration
+serviceMesh:
+  istio:
+    enabled: true
+    mtls:
+      mode: STRICT
+    circuitBreaker:
+      enabled: true
+    retry:
+      enabled: true
+    timeout:
+      enabled: true
+

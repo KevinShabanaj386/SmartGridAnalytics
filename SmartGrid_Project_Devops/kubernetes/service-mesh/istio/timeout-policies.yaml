@@ -1,0 +1,86 @@
+# Istio Timeout Policies për të gjitha services
+# Përcakton timeout values për different operations
+
+---
+# Timeout Policy për API Gateway
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: timeout-api-gateway
+  namespace: smartgrid
+spec:
+  hosts:
+  - api-gateway
+  http:
+  # Short timeout për health checks
+  - match:
+    - uri:
+        prefix: "/health"
+    route:
+    - destination:
+        host: api-gateway
+    timeout: 5s
+  # Medium timeout për standard operations
+  - match:
+    - uri:
+        prefix: "/api/v1/analytics"
+    route:
+    - destination:
+        host: api-gateway
+    timeout: 30s
+  # Long timeout për data ingestion
+  - match:
+    - uri:
+        prefix: "/api/v1/ingest"
+    route:
+    - destination:
+        host: api-gateway
+    timeout: 60s
+  # Default timeout
+  - route:
+    - destination:
+        host: api-gateway
+    timeout: 30s
+
+---
+# Timeout Policy për Data Processing
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: timeout-data-processing
+  namespace: smartgrid
+spec:
+  hosts:
+  - data-processing
+  http:
+  - route:
+    - destination:
+        host: data-processing
+    timeout: 60s  # Longer timeout për batch processing
+
+---
+# Timeout Policy për Analytics
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: timeout-analytics
+  namespace: smartgrid
+spec:
+  hosts:
+  - analytics
+  http:
+  # Short timeout për cached queries
+  - match:
+    - headers:
+        x-cache:
+          exact: "hit"
+    route:
+    - destination:
+        host: analytics
+    timeout: 5s
+  # Medium timeout për standard queries
+  - route:
+    - destination:
+        host: analytics
+    timeout: 30s
+

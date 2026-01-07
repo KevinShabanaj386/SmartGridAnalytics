@@ -1,0 +1,418 @@
+asyncapi: 3.0.0
+info:
+  title: Smart Grid Analytics Event-Driven API
+  version: 1.0.0
+  description: |
+    AsyncAPI specification për event-driven APIs në Smart Grid Analytics.
+    Dokumenton të gjitha Kafka topics, event schemas, dhe message formats.
+  contact:
+    name: Smart Grid Analytics Team
+    email: support@smartgrid.local
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  kafka:
+    url: smartgrid-kafka:9092
+    protocol: kafka
+    description: Kafka broker për event streaming
+    security:
+      - {}  # No authentication (development)
+    tags:
+      - name: development
+      - name: production
+
+defaultContentType: application/avro
+
+channels:
+  smartgrid-sensor-data:
+    address: smartgrid-sensor-data
+    messages:
+      sensorDataMessage:
+        $ref: '#/components/messages/SensorDataMessage'
+    description: Topic për të dhënat e sensorëve
+    bindings:
+      kafka:
+        topic: smartgrid-sensor-data
+        partitions: 3
+        replicas: 1
+        bindingVersion: 0.4.0
+
+  smartgrid-meter-readings:
+    address: smartgrid-meter-readings
+    messages:
+      meterReadingMessage:
+        $ref: '#/components/messages/MeterReadingMessage'
+    description: Topic për leximet e matësve
+    bindings:
+      kafka:
+        topic: smartgrid-meter-readings
+        partitions: 3
+        replicas: 1
+        bindingVersion: 0.4.0
+
+  smartgrid-weather-data:
+    address: smartgrid-weather-data
+    messages:
+      weatherDataMessage:
+        $ref: '#/components/messages/WeatherDataMessage'
+    description: Topic për të dhënat e motit
+    bindings:
+      kafka:
+        topic: smartgrid-weather-data
+        partitions: 2
+        replicas: 1
+        bindingVersion: 0.4.0
+
+  smartgrid-alerts:
+    address: smartgrid-alerts
+    messages:
+      alertMessage:
+        $ref: '#/components/messages/AlertMessage'
+    description: Topic për alertat dhe njoftimet
+    bindings:
+      kafka:
+        topic: smartgrid-alerts
+        partitions: 2
+        replicas: 1
+        bindingVersion: 0.4.0
+
+  smartgrid-notifications:
+    address: smartgrid-notifications
+    messages:
+      notificationMessage:
+        $ref: '#/components/messages/NotificationMessage'
+    description: Topic për njoftimet
+    bindings:
+      kafka:
+        topic: smartgrid-notifications
+        partitions: 2
+        replicas: 1
+        bindingVersion: 0.4.0
+
+operations:
+  publishSensorData:
+    action: send
+    channel:
+      $ref: '#/channels/smartgrid-sensor-data'
+    title: Publish Sensor Data
+    summary: Publikon të dhëna nga sensorët
+    bindings:
+      kafka:
+        clientId: data-ingestion-service
+        groupId: sensor-data-producers
+
+  consumeSensorData:
+    action: receive
+    channel:
+      $ref: '#/channels/smartgrid-sensor-data'
+    title: Consume Sensor Data
+    summary: Konsumon të dhëna nga sensorët
+    bindings:
+      kafka:
+        clientId: data-processing-service
+        groupId: data-processing-consumers
+
+  publishMeterReading:
+    action: send
+    channel:
+      $ref: '#/channels/smartgrid-meter-readings'
+    title: Publish Meter Reading
+    summary: Publikon lexim matësi
+    bindings:
+      kafka:
+        clientId: data-ingestion-service
+        groupId: meter-readings-producers
+
+  consumeMeterReading:
+    action: receive
+    channel:
+      $ref: '#/channels/smartgrid-meter-readings'
+    title: Consume Meter Reading
+    summary: Konsumon lexim matësi
+    bindings:
+      kafka:
+        clientId: data-processing-service
+        groupId: data-processing-consumers
+
+components:
+  messages:
+    SensorDataMessage:
+      name: SensorDataMessage
+      title: Sensor Data Message
+      summary: Mesazh për të dhënat e sensorëve
+      contentType: application/avro
+      payload:
+        $ref: '#/components/schemas/SensorData'
+      headers:
+        type: object
+        properties:
+          event_id:
+            type: string
+            format: uuid
+          timestamp:
+            type: string
+            format: date-time
+          source:
+            type: string
+            example: data-ingestion-service
+          schema_version:
+            type: string
+            example: "1.0.0"
+      bindings:
+        kafka:
+          key:
+            type: string
+            description: sensor_id
+          bindingVersion: 0.4.0
+
+    MeterReadingMessage:
+      name: MeterReadingMessage
+      title: Meter Reading Message
+      summary: Mesazh për lexim matësi
+      contentType: application/avro
+      payload:
+        $ref: '#/components/schemas/MeterReading'
+      headers:
+        type: object
+        properties:
+          event_id:
+            type: string
+            format: uuid
+          timestamp:
+            type: string
+            format: date-time
+          source:
+            type: string
+            example: data-ingestion-service
+          schema_version:
+            type: string
+            example: "1.0.0"
+      bindings:
+        kafka:
+          key:
+            type: string
+            description: meter_id
+          bindingVersion: 0.4.0
+
+    WeatherDataMessage:
+      name: WeatherDataMessage
+      title: Weather Data Message
+      summary: Mesazh për të dhënat e motit
+      contentType: application/avro
+      payload:
+        $ref: '#/components/schemas/WeatherData'
+      headers:
+        type: object
+        properties:
+          event_id:
+            type: string
+            format: uuid
+          timestamp:
+            type: string
+            format: date-time
+          source:
+            type: string
+            example: weather-producer-service
+          schema_version:
+            type: string
+            example: "1.0.0"
+      bindings:
+        kafka:
+          key:
+            type: string
+            description: location_id
+          bindingVersion: 0.4.0
+
+    AlertMessage:
+      name: AlertMessage
+      title: Alert Message
+      summary: Mesazh për alertat
+      contentType: application/avro
+      payload:
+        $ref: '#/components/schemas/Alert'
+      headers:
+        type: object
+        properties:
+          event_id:
+            type: string
+            format: uuid
+          timestamp:
+            type: string
+            format: date-time
+          severity:
+            type: string
+            enum: [low, medium, high, critical]
+          source:
+            type: string
+            example: analytics-service
+      bindings:
+        kafka:
+          key:
+            type: string
+            description: alert_id
+          bindingVersion: 0.4.0
+
+    NotificationMessage:
+      name: NotificationMessage
+      title: Notification Message
+      summary: Mesazh për njoftimet
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/Notification'
+      headers:
+        type: object
+        properties:
+          notification_id:
+            type: string
+            format: uuid
+          timestamp:
+            type: string
+            format: date-time
+          type:
+            type: string
+            enum: [email, sms, webhook, push]
+          priority:
+            type: string
+            enum: [low, medium, high, critical]
+
+  schemas:
+    SensorData:
+      type: object
+      description: Schema për të dhënat e sensorëve (Avro)
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          description: Unique event identifier
+        sensor_id:
+          type: string
+          description: Sensor identifier
+        sensor_type:
+          type: string
+          enum: [voltage, current, power, frequency]
+          description: Type of sensor
+        value:
+          type: number
+          description: Sensor reading value
+        latitude:
+          type: number
+          format: float
+          description: Geographic latitude
+        longitude:
+          type: number
+          format: float
+          description: Geographic longitude
+        timestamp:
+          type: string
+          format: date-time
+          description: Event timestamp
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional metadata
+
+    MeterReading:
+      type: object
+      description: Schema për lexim matësi (Avro)
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        meter_id:
+          type: string
+        customer_id:
+          type: string
+        reading:
+          type: number
+        unit:
+          type: string
+          enum: [kWh, MWh]
+        timestamp:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+
+    WeatherData:
+      type: object
+      description: Schema për të dhënat e motit (Avro)
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        location_id:
+          type: string
+        temperature:
+          type: number
+        humidity:
+          type: number
+        wind_speed:
+          type: number
+        pressure:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+
+    Alert:
+      type: object
+      description: Schema për alertat
+      properties:
+        alert_id:
+          type: string
+          format: uuid
+        alert_type:
+          type: string
+          enum: [anomaly, threshold_exceeded, system_failure]
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        sensor_id:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    Notification:
+      type: object
+      description: Schema për njoftimet
+      properties:
+        notification_id:
+          type: string
+          format: uuid
+        recipient:
+          type: string
+        type:
+          type: string
+          enum: [email, sms, webhook, push]
+        subject:
+          type: string
+        message:
+          type: string
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, sent, failed]
+
+tags:
+  - name: sensor-data
+    description: Sensor data events
+  - name: meter-readings
+    description: Meter reading events
+  - name: weather-data
+    description: Weather data events
+  - name: alerts
+    description: Alert events
+  - name: notifications
+    description: Notification events
+

@@ -1,0 +1,190 @@
+# Istio DestinationRules për të gjitha services
+# Përcakton traffic policies, circuit breakers, dhe load balancing
+
+---
+# API Gateway DestinationRule
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: api-gateway
+  namespace: smartgrid
+spec:
+  host: api-gateway
+  trafficPolicy:
+    loadBalancer:
+      simple: LEAST_CONN
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 30s
+      http:
+        http1MaxPendingRequests: 10
+        http2MaxRequests: 100
+        maxRequestsPerConnection: 2
+        maxRetries: 3
+        idleTimeout: 90s
+    circuitBreaker:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+    tls:
+      mode: ISTIO_MUTUAL
+
+---
+# Data Ingestion Service DestinationRule
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: data-ingestion
+  namespace: smartgrid
+spec:
+  host: data-ingestion
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      tcp:
+        maxConnections: 50
+      http:
+        maxRetries: 3
+    circuitBreaker:
+      consecutiveErrors: 3
+      interval: 30s
+    tls:
+      mode: ISTIO_MUTUAL
+
+---
+# Data Processing Service DestinationRule
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: data-processing
+  namespace: smartgrid
+spec:
+  host: data-processing
+  trafficPolicy:
+    loadBalancer:
+      simple: LEAST_CONN
+    connectionPool:
+      tcp:
+        maxConnections: 200
+      http:
+        maxRetries: 5
+    circuitBreaker:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 60s
+    tls:
+      mode: ISTIO_MUTUAL
+
+---
+# Analytics Service DestinationRule
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: analytics
+  namespace: smartgrid
+spec:
+  host: analytics
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        maxRetries: 3
+        perConnectionBufferLimitBytes: 32768
+    circuitBreaker:
+      consecutiveErrors: 5
+      interval: 30s
+    tls:
+      mode: ISTIO_MUTUAL
+
+---
+# Notification Service DestinationRule
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: notification
+  namespace: smartgrid
+spec:
+  host: notification
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      tcp:
+        maxConnections: 50
+      http:
+        maxRetries: 3
+    circuitBreaker:
+      consecutiveErrors: 3
+      interval: 30s
+    tls:
+      mode: ISTIO_MUTUAL
+
+---
+# User Management Service DestinationRule
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: user-management
+  namespace: smartgrid
+spec:
+  host: user-management
+  trafficPolicy:
+    loadBalancer:
+      simple: LEAST_CONN
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        maxRetries: 3
+    circuitBreaker:
+      consecutiveErrors: 5
+      interval: 30s
+    tls:
+      mode: ISTIO_MUTUAL
+
+---
+# Weather Producer Service DestinationRule
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: weather-producer
+  namespace: smartgrid
+spec:
+  host: weather-producer
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      tcp:
+        maxConnections: 20
+    tls:
+      mode: ISTIO_MUTUAL
+
+---
+# Spark Streaming Service DestinationRule
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: spark-streaming
+  namespace: smartgrid
+spec:
+  host: spark-streaming
+  trafficPolicy:
+    loadBalancer:
+      simple: LEAST_CONN
+    connectionPool:
+      tcp:
+        maxConnections: 50
+    tls:
+      mode: ISTIO_MUTUAL
+
