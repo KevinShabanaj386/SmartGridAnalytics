@@ -360,20 +360,29 @@ services:
 
   # Frontend Web Application
   frontend:
-    build: ./frontend
+    build: 
+      context: ./frontend
+      dockerfile: dockerfile
     container_name: smartgrid-frontend
     ports:
-      - "8081:8080"  # host:container (changed host port from 8080 to 8081 to avoid conflicts)
+      - "8080:8080"  # host:container
     environment:
       - API_GATEWAY_URL=http://smartgrid-api-gateway:5000
+      - ANALYTICS_SERVICE_URL=http://smartgrid-analytics:5002
       - SECRET_KEY=dev-secret-key-change-in-production
+      - PORT=8080
+      - HOST=0.0.0.0
       # Kosovo Collectors URLs (fallback to localhost if not in same network)
       - KOSOVO_WEATHER_URL=http://kosovo-weather-collector:5007
       - KOSOVO_PRICE_URL=http://kosovo-energy-price-collector:5008
       - KOSOVO_CONSUMPTION_URL=http://kosovo-consumption-collector:5009
     depends_on:
       - api-gateway
+      - analytics-service
     restart: unless-stopped
+    volumes:
+      - ./frontend/static:/app/static:ro
+      - ./frontend/templates:/app/templates:ro
 
   # Weather Data Producer Service (bazuar në Real-Time Energy Monitoring System)
   weather-producer:

@@ -472,28 +472,37 @@ def proxy_budget_calculator():
     try:
         # Forward request to analytics service
         params = request.args.to_dict()
-        response = requests.get(
-            f'{ANALYTICS_SERVICE_URL}/api/v1/analytics/budget-calculator',
-            params=params,
-            timeout=10
-        )
-        return jsonify(response.json()), response.status_code
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error connecting to analytics service: {e}")
+        
+        # Try configured URL first
+        try:
+            response = requests.get(
+                f'{ANALYTICS_SERVICE_URL}/api/v1/analytics/budget-calculator',
+                params=params,
+                timeout=10
+            )
+            if response.status_code == 200:
+                return jsonify(response.json()), response.status_code
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Failed to connect to {ANALYTICS_SERVICE_URL}: {e}")
+        
         # Try localhost fallback
         try:
-            params = request.args.to_dict()
             response = requests.get(
                 'http://localhost:5002/api/v1/analytics/budget-calculator',
                 params=params,
                 timeout=10
             )
-            return jsonify(response.json()), response.status_code
-        except:
-            return jsonify({
-                'error': 'Analytics service unavailable',
-                'service_down': True
-            }), 503
+            if response.status_code == 200:
+                return jsonify(response.json()), response.status_code
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Failed to connect to localhost:5002: {e}")
+        
+        # Return error if all attempts failed
+        return jsonify({
+            'error': 'Analytics service unavailable. Please ensure analytics-service is running on port 5002.',
+            'service_down': True
+        }), 503
+        
     except Exception as e:
         logger.error(f"Error in budget calculator proxy: {e}")
         return jsonify({'error': str(e)}), 500
