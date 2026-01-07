@@ -343,7 +343,8 @@ services:
     build: ./api_gateway
     container_name: smartgrid-api-gateway
     ports:
-      - "5000:5000"
+      - "5000:5000"  # internal port
+      - "5010:5000"  # host:container mapping to avoid conflicts on common ports
     environment:
       - DATA_INGESTION_SERVICE=http://smartgrid-data-ingestion:5001
       - DATA_PROCESSING_SERVICE=http://smartgrid-data-processing:5001
@@ -489,3 +490,5 @@ volumes:
   sonarqube_logs:
   mongodb_data:
   cassandra_data:
+  tensorflow_models:
+  tensorflow_models:
