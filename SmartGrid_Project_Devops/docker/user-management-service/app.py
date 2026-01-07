@@ -527,6 +527,19 @@ if OAUTH2_AVAILABLE:
                 if not auth_data:
                     return jsonify({'error': 'Invalid or expired authorization code'}), 400
                 
+                # PKCE validation (nëse code_verifier është i dërguar)
+                code_verifier = data.get('code_verifier')
+                if code_verifier:
+                    stored_verifier = get_code_verifier(code)
+                    if not stored_verifier:
+                        # Nëse nuk ka stored verifier, mund të jetë OK (PKCE optional)
+                        logger.debug("PKCE code_verifier provided but no stored verifier found")
+                    else:
+                        # Validon code challenge
+                        code_challenge = data.get('code_challenge')
+                        if code_challenge and not validate_code_challenge(code_verifier, code_challenge):
+                            return jsonify({'error': 'invalid_grant', 'error_description': 'Invalid code challenge'}), 400
+                
                 user_id = auth_data['user_id']
                 scope = data.get('scope', 'read write')
                 
