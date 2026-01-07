@@ -137,3 +137,74 @@ def validate_client_credentials(client_id: str, client_secret: str) -> bool:
     client = OAUTH2_CLIENTS[client_id]
     return client['client_secret'] == client_secret
 
+def generate_code_verifier() -> str:
+    """
+    Gjeneron code verifier për PKCE (Proof Key for Code Exchange)
+    RFC 7636
+    """
+    import base64
+    import secrets
+    
+    # Code verifier: 43-128 karaktere, URL-safe base64
+    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8').rstrip('=')
+    return code_verifier
+
+def generate_code_challenge(code_verifier: str) -> str:
+    """
+    Gjeneron code challenge nga code verifier (SHA256 hash)
+    RFC 7636
+    """
+    import hashlib
+    import base64
+    
+    # Code challenge = base64url(SHA256(code_verifier))
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode('utf-8')).digest()
+    ).decode('utf-8').rstrip('=')
+    return code_challenge
+
+def validate_code_challenge(code_verifier: str, code_challenge: str) -> bool:
+    """
+    Validon code challenge me code verifier
+    """
+    expected_challenge = generate_code_challenge(code_verifier)
+    return code_challenge == expected_challenge
+
+# Store code verifiers për PKCE (në prodhim, përdor Redis)
+code_verifiers = {}
+
+def store_code_verifier(auth_code: str, code_verifier: str):
+    """Ruaj code verifier për authorization code"""
+    code_verifiers[auth_code] = code_verifier
+
+def get_code_verifier(auth_code: str) -> Optional[str]:
+    """Merr code verifier për authorization code"""
+    return code_verifiers.get(auth_code)
+
+def introspect_token(token: str) -> Optional[Dict]:
+    """
+    Token introspection endpoint (RFC 7662)
+    Merr informacion për një access token
+    """
+    try:
+        payload = validate_access_token(token)
+        if not payload:
+            return {
+                'active': False
+            }
+        
+        return {
+            'active': True,
+            'sub': payload.get('sub'),
+            'client_id': payload.get('client_id'),
+            'scope': payload.get('scope', ''),
+            'exp': payload.get('exp'),
+            'iat': payload.get('iat'),
+            'token_type': payload.get('token_type', 'Bearer')
+        }
+    except Exception as e:
+        logger.error(f"Error introspecting token: {str(e)}")
+        return {
+            'active': False
+        }
+

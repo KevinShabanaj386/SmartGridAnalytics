@@ -16,12 +16,14 @@ import urllib.parse
 import signal
 import sys
 
-# Import OAuth2 module
+    # Import OAuth2 module
 try:
     from oauth2 import (
         generate_authorization_code, validate_authorization_code,
         generate_access_token, validate_access_token, refresh_access_token,
-        validate_client_credentials, OAUTH2_CLIENTS
+        validate_client_credentials, OAUTH2_CLIENTS,
+        generate_code_verifier, generate_code_challenge, validate_code_challenge,
+        store_code_verifier, get_code_verifier, introspect_token
     )
     OAUTH2_AVAILABLE = True
 except ImportError:
