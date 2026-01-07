@@ -36,6 +36,17 @@ except ImportError:
     pass
     AUDIT_LOGS_AVAILABLE = False
 
+# Import Behavioral Analytics module
+try:
+    from behavioral_analytics import (
+        calculate_user_risk_score, get_high_risk_users,
+        detect_behavioral_anomalies, get_user_behavior_features
+    )
+    BEHAVIORAL_ANALYTICS_AVAILABLE = True
+except ImportError:
+    pass
+    BEHAVIORAL_ANALYTICS_AVAILABLE = False
+
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -351,7 +362,13 @@ def login():
                 'email': user['email'],
                 'role': user['role']
             }
-        }), 200
+        }
+        
+        # Shto behavioral warning nëse ka
+        if behavioral_warning:
+            response_data['behavioral_warning'] = behavioral_warning
+        
+        return jsonify(response_data), 200
         
     except Exception as e:
         logger.error(f"Error during login: {str(e)}")
@@ -612,6 +629,69 @@ def signal_handler(sig, frame):
     logger.info("Received shutdown signal, deregistering from Consul...")
     deregister_from_consul()
     sys.exit(0)
+
+@app.route('/api/v1/auth/behavioral/risk-score/<int:user_id>', methods=['GET'])
+@require_auth
+@require_role('admin')
+def get_user_risk_score(user_id):
+    """
+    Merr risk score për një user (Behavioral Analytics - kërkesë e profesorit)
+    """
+    if not BEHAVIORAL_ANALYTICS_AVAILABLE:
+        return jsonify({'error': 'Behavioral analytics not available'}), 503
+    
+    try:
+        risk_result = calculate_user_risk_score(user_id)
+        return jsonify(risk_result), 200
+    except Exception as e:
+        logger.error(f"Error getting user risk score: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/auth/behavioral/high-risk-users', methods=['GET'])
+@require_auth
+@require_role('admin')
+def get_high_risk_users_list():
+    """
+    Merr listën e users me risk score të lartë (Behavioral Analytics - kërkesë e profesorit)
+    """
+    if not BEHAVIORAL_ANALYTICS_AVAILABLE:
+        return jsonify({'error': 'Behavioral analytics not available'}), 503
+    
+    try:
+        threshold = int(request.args.get('threshold', 50))
+        high_risk_users = get_high_risk_users(threshold)
+        return jsonify({
+            'status': 'success',
+            'threshold': threshold,
+            'count': len(high_risk_users),
+            'users': high_risk_users
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting high risk users: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/auth/behavioral/features/<int:user_id>', methods=['GET'])
+@require_auth
+@require_role('admin')
+def get_user_behavior_features_endpoint(user_id):
+    """
+    Merr behavioral features për një user (Behavioral Analytics - kërkesë e profesorit)
+    """
+    if not BEHAVIORAL_ANALYTICS_AVAILABLE:
+        return jsonify({'error': 'Behavioral analytics not available'}), 503
+    
+    try:
+        days = int(request.args.get('days', 30))
+        features = get_user_behavior_features(user_id, days)
+        return jsonify({
+            'status': 'success',
+            'user_id': user_id,
+            'days': days,
+            'features': features
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting user behavior features: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
 if __name__ == '__main__':
     logger.info("Initializing User Management Service...")
