@@ -3,531 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Smart Grid Analytics Dashboard - Real-time monitoring and analytics for smart grid systems">
     <title>Smart Grid Analytics - Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/static/css/modern-style.css?v=2.0">
-    <style>
-        .login-section {
-            background: linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(22, 33, 62, 0.95) 100%);
-            backdrop-filter: blur(20px);
-            padding: 40px;
-            border-radius: 0;
-            margin-bottom: 25px;
-            border: 2px solid var(--neon-cyan);
-            box-shadow: 0 0 30px rgba(0, 243, 255, 0.3);
-            max-width: 500px;
-            margin: 0 auto 25px;
-            animation: fadeIn 0.6s ease-out;
-            clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
-        }
-
-        .login-section h2 {
-            margin-bottom: 25px;
-            color: var(--neon-cyan);
-            font-size: 1.75rem;
-            font-weight: 700;
-            font-family: 'Orbitron', sans-serif;
-            text-align: center;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            text-shadow: 0 0 15px var(--neon-cyan);
-        }
-
-        .user-info {
-            float: right;
-            color: var(--neon-green);
-            font-weight: 600;
-            padding: 8px 16px;
-            background: transparent;
-            border: 2px solid var(--neon-green);
-            border-radius: 0;
-            margin-top: 5px;
-            font-family: 'Orbitron', sans-serif;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
-            clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 5px 100%, 0 calc(100% - 5px));
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-        }
-
-        .loading-spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--text-dim);
-        }
-
-        .empty-state-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-            opacity: 0.3;
-        }
-
-        .empty-state h3 {
-            font-size: 1.5rem;
-            margin-bottom: 10px;
-            color: var(--neon-cyan);
-            font-family: 'Orbitron', sans-serif;
-            text-shadow: 0 0 10px var(--neon-cyan);
-        }
-
-        .empty-state p {
-            font-size: 1rem;
-        }
-
-        @media (max-width: 768px) {
-            .login-section {
-                padding: 25px;
-                margin: 0 10px 20px;
-            }
-
-            .user-info {
-                float: none;
-                display: block;
-                text-align: center;
-                margin-top: 10px;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/simple-style.css">
 </head>
 <body>
-    <div class="container">
         <div class="header">
-            <h1>⚡ Smart Grid Analytics Dashboard</h1>
-            <div class="user-info" id="userInfo" aria-live="polite"></div>
-            <nav class="nav" role="navigation" aria-label="Main navigation">
-                <a href="/" class="active" aria-current="page">Dashboard</a>
+        <h1>⚡ Smart Grid Analytics</h1>
+        <nav class="nav">
+            <a href="/" class="active">Dashboard</a>
                 <a href="/dashboard">Statistikat</a>
                 <a href="/analytics">Analiza</a>
                 <a href="/sensors">Sensorët</a>
-                <a href="/kosovo">🇽🇰 Kosovo</a>
+            <a href="/kosovo">🇽🇰 Kosovo</a>
             </nav>
         </div>
         
-        <section id="loginSection" class="login-section" aria-labelledby="login-heading">
-            <h2 id="login-heading">🔐 Hyrje në Sistem</h2>
-            <div id="loginAlert" role="alert" aria-live="assertive"></div>
-            <form id="loginForm" aria-label="Login form">
+    <div class="container">
+        <!-- Login Section -->
+        <div id="loginSection" class="card" style="max-width: 400px; margin: 2rem auto;">
+            <h3>🔐 Hyrje në Sistem</h3>
+            <div id="loginAlert"></div>
+            <form id="loginForm">
                 <div class="form-group">
                     <label for="username">Username:</label>
-                    <input 
-                        type="text" 
-                        id="username" 
-                        name="username"
-                        value="admin" 
-                        required
-                        autocomplete="username"
-                        aria-required="true"
-                    >
+                    <input type="text" id="username" name="username" value="admin" required>
                 </div>
                 <div class="form-group">
                     <label for="password">Password:</label>
-                    <input 
-                        type="password" 
-                        id="password" 
-                        name="password"
-                        value="admin123" 
-                        required
-                        autocomplete="current-password"
-                        aria-required="true"
-                    >
+                    <input type="password" id="password" name="password" value="admin123" required>
                 </div>
-                <button type="submit" class="btn" aria-label="Submit login">Hyr</button>
+                <button type="submit" class="btn" style="width: 100%;">Hyr</button>
             </form>
-        </section>
-        
-        <main id="dashboardContent" class="hidden" aria-label="Dashboard content">
-            <div class="stats-grid" id="statsGrid" role="region" aria-label="Statistics overview">
-                <!-- Statistics will be loaded here -->
             </div>
             
+        <!-- Dashboard Content -->
+        <div id="dashboardContent" class="hidden">
+            <!-- User Info & Actions -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <div>
+                    <span id="userInfo" style="font-weight: 600; color: var(--text-light);"></span>
+                    </div>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-outline" onclick="refreshAll()">🔄 Refresh</button>
+                    <button class="btn btn-sm btn-secondary" onclick="exportData()">📥 Export</button>
+                    <button class="btn btn-sm btn-secondary" onclick="showSettings()">⚙️ Settings</button>
+                    </div>
+    </div>
+    
+            <!-- Quick Stats -->
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="label">Sensorë Aktivë</div>
+                    <div class="value" id="activeSensors">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Mesatarja</div>
+                    <div class="value" id="avgValue">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Lexime Totale</div>
+                    <div class="value" id="totalReadings">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Anomalitë</div>
+                    <div class="value" id="anomaliesCount">-</div>
+                </div>
+            </div>
+
+            <!-- Charts Grid -->
             <div class="dashboard-grid">
-                <article class="card" aria-labelledby="forecast-heading">
-                    <h3 id="forecast-heading">📊 Parashikim Ngarkese</h3>
-                    <div class="chart-container">
-                        <canvas id="loadForecastChart" aria-label="Load forecast chart"></canvas>
+                <!-- Forecast Chart -->
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3>📊 Parashikim Ngarkese</h3>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline" onclick="loadForecast(24)">24h</button>
+                            <button class="btn btn-sm btn-outline" onclick="loadForecast(48)">48h</button>
+                            <button class="btn btn-sm btn-outline" onclick="loadForecast(72)">72h</button>
+                        </div>
                     </div>
-                </article>
-                
-                <article class="card" aria-labelledby="sensor-stats-heading">
-                    <h3 id="sensor-stats-heading">📈 Statistikat e Sensorëve</h3>
                     <div class="chart-container">
-                        <canvas id="sensorStatsChart" aria-label="Sensor statistics chart"></canvas>
+                        <canvas id="forecastChart"></canvas>
                     </div>
-                </article>
-                
-                <article class="card" aria-labelledby="anomalies-heading">
-                    <h3 id="anomalies-heading">⚠️ Anomalitë</h3>
-                    <div id="anomaliesList" role="list" aria-label="Anomalies list">
+                </div>
+
+                <!-- Sensor Stats Chart -->
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3>📈 Statistikat e Sensorëve</h3>
+                        <button class="btn btn-sm btn-outline" onclick="loadSensorStats()">🔄 Refresh</button>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="sensorStatsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Real-time Data Chart -->
+                <div class="card">
+                    <h3>⚡ Të Dhëna në Kohë Reale</h3>
+                    <div class="chart-container">
+                        <canvas id="realtimeChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Anomalies Chart -->
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3>⚠️ Anomalitë</h3>
+                        <button class="btn btn-sm btn-outline" onclick="loadAnomalies()">🔄 Refresh</button>
+                        </div>
+                    <div id="anomaliesList">
                         <div class="empty-state">
                             <div class="empty-state-icon">📊</div>
                             <p>Duke ngarkuar të dhëna...</p>
                         </div>
                     </div>
-                </article>
+                </div>
+                    </div>
+
+            <!-- Data Table -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>📋 Të Dhënat e Fundit</h3>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline" onclick="loadRecentData(10)">10</button>
+                        <button class="btn btn-sm btn-outline" onclick="loadRecentData(25)">25</button>
+                        <button class="btn btn-sm btn-outline" onclick="loadRecentData(50)">50</button>
+                    </div>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Sensor ID</th>
+                                <th>Lloji</th>
+                                <th>Vlera</th>
+                                <th>Koha</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody">
+                            <tr>
+                                <td colspan="5" class="text-center">Duke ngarkuar...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </main>
+        </div>
     </div>
-    
-    <script>
-        let authToken = null;
-        let loadForecastChart = null;
-        let sensorStatsChart = null;
-        let refreshInterval = null;
-        
-        // Login form handler
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            
-            const submitBtn = e.target.querySelector('button[type="submit"]');
-            const originalText = submitBtn.textContent;
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Duke hyrë...';
-            
-            try {
-                const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username, password}),
-                    credentials: 'include'
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    authToken = data.token;
-                    localStorage.setItem('authToken', authToken);
-                    sessionStorage.setItem('authToken', authToken);
-                    document.getElementById('loginSection').classList.add('hidden');
-                    document.getElementById('dashboardContent').classList.remove('hidden');
-                    document.getElementById('userInfo').textContent = `👤 ${data.user.username}`;
-                    loadDashboard();
-                } else {
-                    showAlert('loginAlert', data.error || 'Login failed', 'error');
-                }
-            } catch (error) {
-                showAlert('loginAlert', 'Error: ' + error.message, 'error');
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = originalText;
-            }
-        });
-        
-        // Check for saved token
-        const savedToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-        if (savedToken) {
-            authToken = savedToken;
-            document.getElementById('loginSection').classList.add('hidden');
-            document.getElementById('dashboardContent').classList.remove('hidden');
-            loadDashboard();
-        }
-        
-        // Load dashboard data
-        async function loadDashboard() {
-            if (!authToken) {
-                document.getElementById('loginSection').classList.remove('hidden');
-                document.getElementById('dashboardContent').classList.add('hidden');
-                return;
-            }
-            
-            try {
-                await Promise.all([
-                    loadStats(),
-                    loadForecast(),
-                    loadAnomalies()
-                ]);
-            } catch (error) {
-                console.error('Error loading dashboard:', error);
-            }
-            
-            // Clear existing interval
-            if (refreshInterval) {
-                clearInterval(refreshInterval);
-            }
-            
-            // Refresh every 30 seconds
-            refreshInterval = setInterval(() => {
-                loadDashboard();
-            }, 30000);
-        }
-        
-        // Load statistics
-        async function loadStats() {
-            try {
-                const response = await fetch('/api/sensor-stats?hours=24', {
-                    headers: {'Authorization': `Bearer ${authToken}`}
-                });
-                const data = await response.json();
-                
-                if (data.status === 'success') {
-                    updateStatsGrid(data.data);
-                    updateSensorChart(data.data);
-                }
-            } catch (error) {
-                console.error('Error loading stats:', error);
-            }
-        }
-        
-        // Load forecast
-        async function loadForecast() {
-            try {
-                const response = await fetch('/api/load-forecast?hours_ahead=24&use_ml=true', {
-                    headers: {'Authorization': `Bearer ${authToken}`}
-                });
-                const data = await response.json();
-                
-                if (data.status === 'success') {
-                    updateForecastChart(data.forecast);
-                }
-            } catch (error) {
-                console.error('Error loading forecast:', error);
-            }
-        }
-        
-        // Load anomalies
-        async function loadAnomalies() {
-            try {
-                const response = await fetch('/api/anomalies', {
-                    headers: {'Authorization': `Bearer ${authToken}`}
-                });
-                const data = await response.json();
-                
-                if (data.status === 'success') {
-                    updateAnomaliesList(data.anomalies);
-                }
-            } catch (error) {
-                console.error('Error loading anomalies:', error);
-            }
-        }
-        
-        // Update stats grid
-        function updateStatsGrid(stats) {
-            const grid = document.getElementById('statsGrid');
-            if (!stats || stats.length === 0) {
-                grid.innerHTML = `
-                    <div class="stat-card">
-                        <div class="label">Nuk ka të dhëna</div>
-                        <div class="value">-</div>
-                    </div>
-                `;
-                return;
-            }
-            
-            const totalSensors = new Set(stats.map(s => s.sensor_id)).size;
-            const avgValue = stats.reduce((sum, s) => sum + parseFloat(s.avg_value || 0), 0) / stats.length;
-            const totalReadings = stats.reduce((sum, s) => sum + parseInt(s.count || 0), 0);
-            
-            grid.innerHTML = `
-                <div class="stat-card">
-                    <div class="label">Sensorë Aktivë</div>
-                    <div class="value">${totalSensors}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="label">Mesatarja</div>
-                    <div class="value">${avgValue.toFixed(2)}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="label">Lexime Totale</div>
-                    <div class="value">${totalReadings}</div>
-                </div>
-            `;
-        }
-        
-        // Update forecast chart
-        function updateForecastChart(forecast) {
-            const ctx = document.getElementById('loadForecastChart').getContext('2d');
-            
-            if (loadForecastChart) {
-                loadForecastChart.destroy();
-            }
-            
-            if (!forecast || forecast.length === 0) {
-                return;
-            }
-            
-            loadForecastChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: forecast.map(f => new Date(f.timestamp).toLocaleTimeString()),
-                    datasets: [{
-                        label: 'Parashikim Ngarkese',
-                        data: forecast.map(f => f.predicted_load),
-                        borderColor: 'rgb(102, 126, 234)',
-                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'top'
-                        },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Ngarkesa (kW)'
-                            }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Koha'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Update sensor chart
-        function updateSensorChart(stats) {
-            const ctx = document.getElementById('sensorStatsChart').getContext('2d');
-            
-            if (sensorStatsChart) {
-                sensorStatsChart.destroy();
-            }
-            
-            if (!stats || stats.length === 0) {
-                return;
-            }
-            
-            const sensorTypes = [...new Set(stats.map(s => s.sensor_type))];
-            const avgByType = sensorTypes.map(type => {
-                const typeStats = stats.filter(s => s.sensor_type === type);
-                return typeStats.reduce((sum, s) => sum + parseFloat(s.avg_value || 0), 0) / typeStats.length;
-            });
-            
-            sensorStatsChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: sensorTypes,
-                    datasets: [{
-                        label: 'Mesatarja e Vlerave',
-                        data: avgByType,
-                        backgroundColor: [
-                            'rgba(102, 126, 234, 0.8)',
-                            'rgba(118, 75, 162, 0.8)',
-                            'rgba(255, 99, 132, 0.8)',
-                            'rgba(54, 162, 235, 0.8)'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'top'
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Vlera'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Update anomalies list
-        function updateAnomaliesList(anomalies) {
-            const list = document.getElementById('anomaliesList');
-            if (!anomalies || anomalies.length === 0) {
-                list.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">✅</div>
-                        <h3>Nuk ka anomalitë</h3>
-                        <p>Sistemi funksionon normalisht</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            list.innerHTML = anomalies.slice(0, 5).map(a => `
-                <div class="anomaly-card ${a.anomaly_type || 'moderate'}" role="listitem">
-                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
-                        <div>
-                            <strong>${a.sensor_id}</strong> - ${a.sensor_type}
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 18px; font-weight: bold; color: ${a.anomaly_type === 'very_high' ? '#ef4444' : '#f59e0b'}">
-                                ${(a.z_score || 0).toFixed(1)}
-                            </div>
-                            <small style="color: #6b7280;">Z-Score</small>
-                        </div>
-                    </div>
-                    <div style="margin: 10px 0;">
-                        <div><strong>Vlera:</strong> ${a.value.toFixed(2)}</div>
-                    </div>
-                    <div style="color: #6b7280; font-size: 12px; margin-top: 10px;">
-                        🕐 ${new Date(a.timestamp).toLocaleString('sq-AL')}
-                    </div>
-                </div>
-            `).join('');
-        }
-        
-        // Show alert
-        function showAlert(containerId, message, type) {
-            const container = document.getElementById(containerId);
-            container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
-            setTimeout(() => {
-                container.innerHTML = '';
-            }, 5000);
-        }
-        
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', () => {
-            if (refreshInterval) {
-                clearInterval(refreshInterval);
-            }
-        });
-    </script>
+
+    <script src="/static/js/dashboard-main.js"></script>
 </body>
 </html>
