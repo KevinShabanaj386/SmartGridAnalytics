@@ -252,6 +252,11 @@ jobs:
         # Ensure kubectl does not use any default kubeconfig pointing to localhost
         unset KUBECONFIG || true
 
+        # Create a dummy kubeconfig/context so kubectl can run client-side only
+        kubectl config set-cluster dummy --server=https://example.invalid --insecure-skip-tls-verify=true >/dev/null 2>&1
+        kubectl config set-context dummy --cluster=dummy >/dev/null 2>&1
+        kubectl config use-context dummy >/dev/null 2>&1
+
         if [ ! -d "SmartGrid_Project_Devops/kubernetes" ]; then
           echo "❌ Error: Kubernetes directory not found"
           exit 1
@@ -268,7 +273,8 @@ jobs:
               return
             fi
             echo "Validating: $f"
-            if ! kubectl apply --dry-run=client --validate=false -f "$f" > /dev/null 2>&1; then
+            # Show kubectl output so real manifest errors are visible
+            if ! kubectl apply --dry-run=client --validate=false -f "$f"; then
               echo "  ❌ Validation failed for: $f"
               VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
             else
