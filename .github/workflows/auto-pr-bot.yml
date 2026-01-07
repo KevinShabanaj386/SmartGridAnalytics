@@ -1,0 +1,184 @@
+name: Auto PR Bot
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Source branch name'
+        required: true
+        default: 'feat/data-lakehouse-trino-implementation'
+      base:
+        description: 'Base branch name'
+        required: false
+        default: 'main'
+      title:
+        description: 'PR title'
+        required: false
+        default: 'Fix CI/CD Kubernetes deployment validation'
+  push:
+    branches:
+      - 'feat/**'
+      - 'fix/**'
+      - 'bugfix/**'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  create-pr:
+    name: Create Pull Request
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Determine branch names
+      id: branches
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "head=${{ github.event.inputs.branch }}" >> $GITHUB_OUTPUT
+          echo "base=${{ github.event.inputs.base }}" >> $GITHUB_OUTPUT
+          echo "title=${{ github.event.inputs.title }}" >> $GITHUB_OUTPUT
+        else
+          HEAD_BRANCH=${GITHUB_REF#refs/heads/}
+          echo "head=${HEAD_BRANCH}" >> $GITHUB_OUTPUT
+          echo "base=main" >> $GITHUB_OUTPUT
+          echo "title=Auto PR: ${HEAD_BRANCH}" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Check if PR already exists
+      id: check-pr
+      run: |
+        HEAD_BRANCH="${{ steps.branches.outputs.head }}"
+        BASE_BRANCH="${{ steps.branches.outputs.base }}"
+        
+        EXISTING_PR=$(gh pr list --base "$BASE_BRANCH" --head "$HEAD_BRANCH" --json number --jq '.[0].number' || echo "")
+        
+        if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ]; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
+          echo "PR #$EXISTING_PR already exists for $HEAD_BRANCH -> $BASE_BRANCH"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "No existing PR found"
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Get commit messages
+      id: commits
+      if: steps.check-pr.outputs.exists == 'false'
+      run: |
+        HEAD_BRANCH="${{ steps.branches.outputs.head }}"
+        BASE_BRANCH="${{ steps.branches.outputs.base }}"
+        
+        COMMITS=$(git log origin/$BASE_BRANCH..HEAD --oneline --format="%h: %s" | head -10)
+        echo "commits<<EOF" >> $GITHUB_OUTPUT
+        echo "$COMMITS" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Generate PR description
+      id: pr-description
+      if: steps.check-pr.outputs.exists == 'false'
+      run: |
+        HEAD_BRANCH="${{ steps.branches.outputs.head }}"
+        BASE_BRANCH="${{ steps.branches.outputs.base }}"
+        
+        # Detect PR type from branch name
+        if [[ "$HEAD_BRANCH" == *"fix"* ]] || [[ "$HEAD_BRANCH" == *"bug"* ]]; then
+          TYPE="🐛 Bug Fix"
+          SUMMARY="This PR fixes issues in the CI/CD pipeline and improves reliability."
+        elif [[ "$HEAD_BRANCH" == *"feat"* ]]; then
+          TYPE="✨ Feature"
+          SUMMARY="This PR adds new features and improvements."
+        else
+          TYPE="📝 Update"
+          SUMMARY="This PR contains updates and improvements."
+        fi
+        
+        DESCRIPTION=$(cat <<EOF
+        ## Summary
+        
+        $SUMMARY
+        
+        ## Changes
+        
+        - Automated PR created by GitHub Actions bot
+        - Branch: \`$HEAD_BRANCH\`
+        - Base: \`$BASE_BRANCH\`
+        
+        ## Commits
+        
+        \`\`\`
+        ${{ steps.commits.outputs.commits }}
+        \`\`\`
+        
+        ## Type
+        $TYPE
+        
+        ## Automated Checks
+        
+        - [ ] CI/CD pipeline passes
+        - [ ] Code review required
+        - [ ] Tests pass
+        EOF
+        )
+        
+        echo "description<<EOF" >> $GITHUB_OUTPUT
+        echo "$DESCRIPTION" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Install GitHub CLI
+      if: steps.check-pr.outputs.exists == 'false'
+      run: |
+        type -p curl >/dev/null || (apt update && apt install curl -y)
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        apt update
+        apt install gh -y
+    
+    - name: Create Pull Request
+      if: steps.check-pr.outputs.exists == 'false'
+      run: |
+        HEAD_BRANCH="${{ steps.branches.outputs.head }}"
+        BASE_BRANCH="${{ steps.branches.outputs.base }}"
+        PR_TITLE="${{ steps.branches.outputs.title }}"
+        PR_BODY="${{ steps.pr-description.outputs.description }}"
+        
+        gh pr create \
+          --base "$BASE_BRANCH" \
+          --head "$HEAD_BRANCH" \
+          --title "$PR_TITLE" \
+          --body "$PR_BODY" \
+          --label "automated,ci/cd"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Comment on existing PR
+      if: steps.check-pr.outputs.exists == 'true'
+      run: |
+        PR_NUMBER="${{ steps.check-pr.outputs.pr_number }}"
+        gh pr comment "$PR_NUMBER" --body "🤖 Auto PR Bot: A PR already exists for this branch (#$PR_NUMBER)"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Output PR URL
+      if: steps.check-pr.outputs.exists == 'false'
+      run: |
+        HEAD_BRANCH="${{ steps.branches.outputs.head }}"
+        BASE_BRANCH="${{ steps.branches.outputs.base }}"
+        PR_URL=$(gh pr list --base "$BASE_BRANCH" --head "$HEAD_BRANCH" --json url --jq '.[0].url' || echo "")
+        if [ -n "$PR_URL" ]; then
+          echo "✅ Pull Request created: $PR_URL"
+          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
