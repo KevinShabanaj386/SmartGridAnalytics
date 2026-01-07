@@ -1242,6 +1242,138 @@ def get_growth_analysis():
         logger.error(f"Error getting growth analysis: {str(e)}")
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
+@app.route('/api/v1/analytics/consumption/peak-hours/dynamic', methods=['GET'])
+def get_dynamic_peak_hours():
+    """
+    Identifikon dinamikisht peak hours bazuar në historical patterns dhe real-time data
+    Query params: days (default: 30) - numri i ditëve për analizë historike
+    """
+    try:
+        days = int(request.args.get('days', 30))
+        customer_id = request.args.get('customer_id')
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Merr consumption data për çdo orë të ditës për periudhën e specifikuar
+        query = """
+            SELECT 
+                EXTRACT(HOUR FROM timestamp) as hour_of_day,
+                AVG(value) as avg_consumption,
+                MAX(value) as max_consumption,
+                MIN(value) as min_consumption,
+                COUNT(*) as reading_count,
+                PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY value) as p75_consumption,
+                PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY value) as p90_consumption
+            FROM sensor_data
+            WHERE timestamp >= NOW() - INTERVAL '%s days'
+            AND sensor_type IN ('power', 'voltage', 'current')
+        """
+        params = [days]
+        
+        if customer_id:
+            query += " AND customer_id = %s"
+            params.append(customer_id)
+        
+        query += " GROUP BY EXTRACT(HOUR FROM timestamp) ORDER BY hour_of_day"
+        
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        
+        if not results:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                'status': 'success',
+                'message': 'Insufficient data for peak hour detection',
+                'peak_hours': []
+            }), 200
+        
+        # Llogarit mesataren globale për të identifikuar peak hours
+        from decimal import Decimal
+        hourly_data = []
+        for row in results:
+            avg_consumption = float(row['avg_consumption']) if isinstance(row['avg_consumption'], (Decimal, int, float)) else 0.0
+            hourly_data.append({
+                'hour': int(row['hour_of_day']),
+                'avg_consumption': avg_consumption,
+                'max_consumption': float(row['max_consumption']) if isinstance(row['max_consumption'], (Decimal, int, float)) else 0.0,
+                'min_consumption': float(row['min_consumption']) if isinstance(row['min_consumption'], (Decimal, int, float)) else 0.0,
+                'reading_count': int(row['reading_count']) if isinstance(row['reading_count'], (Decimal, int)) else 0,
+                'p75_consumption': float(row['p75_consumption']) if isinstance(row['p75_consumption'], (Decimal, int, float)) else 0.0,
+                'p90_consumption': float(row['p90_consumption']) if isinstance(row['p90_consumption'], (Decimal, int, float)) else 0.0
+            })
+        
+        # Llogarit mesataren globale
+        global_avg = sum(h['avg_consumption'] for h in hourly_data) / len(hourly_data) if hourly_data else 0
+        
+        # Llogarit standard deviation
+        if len(hourly_data) > 1:
+            variance = sum((h['avg_consumption'] - global_avg) ** 2 for h in hourly_data) / len(hourly_data)
+            stddev = variance ** 0.5
+        else:
+            stddev = 0
+        
+        # Identifikon peak hours (orët me konsum më të lartë se mesatarja + 1 stddev)
+        # Ose top 25% e orëve me konsum më të lartë
+        threshold = global_avg + (stddev * 0.5) if stddev > 0 else global_avg * 1.2
+        
+        # Sort by average consumption
+        hourly_data_sorted = sorted(hourly_data, key=lambda x: x['avg_consumption'], reverse=True)
+        
+        # Top 25% e orëve janë peak hours
+        top_percentile = max(1, int(len(hourly_data_sorted) * 0.25))
+        peak_hours = hourly_data_sorted[:top_percentile]
+        
+        # Gjithashtu identifikon orët që kalojnë threshold
+        threshold_peak_hours = [h for h in hourly_data if h['avg_consumption'] >= threshold]
+        
+        # Kombino rezultatet (union)
+        peak_hour_set = set()
+        for h in peak_hours:
+            peak_hour_set.add(h['hour'])
+        for h in threshold_peak_hours:
+            peak_hour_set.add(h['hour'])
+        
+        # Krijon listë të renditur të peak hours
+        final_peak_hours = sorted(list(peak_hour_set))
+        
+        # Merr detajet për çdo peak hour
+        peak_hours_details = []
+        for hour in final_peak_hours:
+            hour_data = next((h for h in hourly_data if h['hour'] == hour), None)
+            if hour_data:
+                peak_hours_details.append({
+                    'hour': hour,
+                    'avg_consumption': round(hour_data['avg_consumption'], 2),
+                    'max_consumption': round(hour_data['max_consumption'], 2),
+                    'min_consumption': round(hour_data['min_consumption'], 2),
+                    'p75_consumption': round(hour_data['p75_consumption'], 2),
+                    'p90_consumption': round(hour_data['p90_consumption'], 2),
+                    'reading_count': hour_data['reading_count'],
+                    'above_global_avg_percent': round(((hour_data['avg_consumption'] - global_avg) / global_avg * 100) if global_avg > 0 else 0, 2)
+                })
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            'status': 'success',
+            'peak_hours': final_peak_hours,
+            'peak_hours_details': peak_hours_details,
+            'detection_method': 'dynamic_historical_analysis',
+            'analysis_period_days': days,
+            'global_avg_consumption': round(global_avg, 2),
+            'threshold_used': round(threshold, 2),
+            'total_hours_analyzed': len(hourly_data),
+            'peak_hours_count': len(final_peak_hours),
+            'detected_at': datetime.now().isoformat()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error detecting dynamic peak hours: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
 @app.route('/api/v1/analytics/geospatial/clustering', methods=['GET'])
 def get_sensor_clustering():
     """
