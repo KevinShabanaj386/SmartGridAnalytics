@@ -305,57 +305,68 @@ jobs:
     - name: Configure kubectl
       if: secrets.KUBECONFIG != ''
       run: |
+        echo "=== Configuring kubectl ==="
         echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
+        chmod 600 kubeconfig
         export KUBECONFIG=$(pwd)/kubeconfig
         echo "KUBECONFIG=$(pwd)/kubeconfig" >> $GITHUB_ENV
+        
         # Test cluster connection
-        kubectl cluster-info || {
-          echo "⚠️ Warning: Could not connect to cluster. KUBECONFIG may be invalid."
+        echo "Testing cluster connection..."
+        if kubectl cluster-info > /dev/null 2>&1; then
+          echo "✅ Successfully connected to cluster"
+          kubectl cluster-info
+          echo ""
+          echo "Cluster context:"
+          kubectl config current-context || echo "No context set"
+        else
+          echo "⚠️ Warning: Could not connect to cluster. KUBECONFIG may be invalid or cluster unavailable."
+          echo "⚠️ Deployment will be skipped."
           exit 0
-        }
-        echo "✅ Successfully connected to cluster"
+        fi
+    
+    - name: Create namespace (if needed)
+      if: secrets.KUBECONFIG != ''
+      env:
+        KUBECONFIG: ${{ github.workspace }}/kubeconfig
+      run: |
+        echo "=== Creating namespace (if needed) ==="
+        export KUBECONFIG="$KUBECONFIG"
+        
+        if kubectl get namespace smartgrid > /dev/null 2>&1; then
+          echo "✅ Namespace 'smartgrid' already exists"
+        else
+          echo "Creating namespace 'smartgrid'..."
+          kubectl create namespace smartgrid || {
+            echo "⚠️ Warning: Could not create namespace. It may already exist."
+          }
+          echo "✅ Namespace created"
+        fi
     
     - name: Deploy në Kubernetes
       if: secrets.KUBECONFIG != ''
       env:
         KUBECONFIG: ${{ github.workspace }}/kubeconfig
       run: |
-        echo "=== Deploy në Kubernetes ==="
-        echo "KUBECONFIG path: $KUBECONFIG"
-        
-        # CRITICAL CHECK: Verify KUBECONFIG file exists
-        if [ ! -f "$KUBECONFIG" ]; then
-          echo "❌ ERROR: KUBECONFIG file not found at $KUBECONFIG"
-          echo "Skipping deployment - KUBECONFIG secret may not be properly configured."
-          exit 0
-        fi
-        
-        echo "✅ KUBECONFIG file found"
-        
-        # Export KUBECONFIG to environment (critical for kubectl to use it)
+        echo "=== Deploying to Kubernetes ==="
+        echo "KUBECONFIG: $KUBECONFIG"
         export KUBECONFIG="$KUBECONFIG"
-        echo "KUBECONFIG exported: $KUBECONFIG"
         
         # Verify cluster connection
-        echo "Testing cluster connection..."
         if ! kubectl cluster-info > /dev/null 2>&1; then
-          echo "⚠️ WARNING: Cannot connect to cluster. Skipping deployment."
-          exit 0
+          echo "❌ ERROR: Cannot connect to cluster. Deployment aborted."
+          exit 1
         fi
+        
         echo "✅ Cluster connection verified"
-        
-        # CRITICAL: ALWAYS use --validate=false to prevent OpenAPI validation errors
-        # Without this flag, kubectl tries to download OpenAPI schema from localhost:8080
-        # which causes "connection refused" errors when no cluster is available
         echo ""
-        echo "=== DEPLOYING WITH --validate=false FLAG ==="
-        echo "This flag prevents OpenAPI validation that requires cluster connection"
+        echo "Deploying manifests to namespace 'smartgrid'..."
+        echo "Note: Server-side validation will occur during actual deployment."
         echo ""
         
-        # THE FIX: Always use --validate=false flag
-        # This is the ONLY way to prevent the "connection refused" error
-        # IMPORTANT: The --validate=false MUST be before -f flag
-        kubectl apply --validate=false -f SmartGrid_Project_Devops/kubernetes/ -n smartgrid
+        # Deploy with server-side validation (cluster is available)
+        # This will validate against the actual cluster's OpenAPI schema
+        kubectl apply -f SmartGrid_Project_Devops/kubernetes/ -n smartgrid
         
         echo ""
         echo "✅ Deployment completed successfully"
@@ -365,13 +376,30 @@ jobs:
       env:
         KUBECONFIG: ${{ github.workspace }}/kubeconfig
       run: |
-        echo "Verifying deployment..."
-        if [ ! -f "$KUBECONFIG" ]; then
-          echo "⚠️ Warning: KUBECONFIG file not found. Skipping verification."
-          exit 0
-        fi
-        kubectl --kubeconfig="$KUBECONFIG" get pods -n smartgrid || echo "⚠️ Warning: Could not verify pods"
-        kubectl --kubeconfig="$KUBECONFIG" get services -n smartgrid || echo "⚠️ Warning: Could not verify services"
+        echo "=== Verifying Deployment ==="
+        export KUBECONFIG="$KUBECONFIG"
+        
+        echo "Waiting for resources to be created..."
+        sleep 5
+        
+        echo ""
+        echo "📦 Deployments:"
+        kubectl get deployments -n smartgrid || echo "⚠️ No deployments found"
+        
+        echo ""
+        echo "🔌 Services:"
+        kubectl get services -n smartgrid || echo "⚠️ No services found"
+        
+        echo ""
+        echo "📋 ConfigMaps:"
+        kubectl get configmaps -n smartgrid || echo "⚠️ No configmaps found"
+        
+        echo ""
+        echo "🔐 Secrets:"
+        kubectl get secrets -n smartgrid || echo "⚠️ No secrets found"
+        
+        echo ""
+        echo "✅ Deployment verification completed"
     
     - name: Skip deployment (no KUBECONFIG)
       if: secrets.KUBECONFIG == ''
