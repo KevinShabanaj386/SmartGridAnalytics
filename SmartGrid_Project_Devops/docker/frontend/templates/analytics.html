@@ -116,6 +116,7 @@
                 <a href="/analytics" class="active" aria-current="page">Analiza</a>
                 <a href="/sensors">Sensorët</a>
                 <a href="/kosovo">🇽🇰 Kosovo</a>
+                <button class="btn btn-sm btn-outline" style="margin-left:auto;" onclick="logout()">Logout</button>
             </nav>
         </div>
         
@@ -190,16 +191,33 @@
         let trendsChart = null;
         let refreshInterval = null;
         
-        // Check authentication
-        if (!authToken) {
+        // Logout function
+        function logout() {
+            try { localStorage.removeItem('authToken'); } catch (e) {}
+            try { sessionStorage.removeItem('authToken'); } catch (e) {}
+            authToken = null;
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
             window.location.href = '/';
         }
         
+        // Check authentication - NEVER redirect immediately, only return status
         function checkAuth() {
-            if (!authToken) {
-                window.location.href = '/';
-            }
+            // Re-check token from storage
+            authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+            return !!authToken; // Return true if token exists, false otherwise
         }
+        
+        // Function to handle redirect only when we get 401 from API
+ function handleAuthFailure() {
+    console.warn('Auth failed (401) on /sensors. In dev we keep the token and stay on the page.');
+    // localStorage.removeItem('authToken');
+    // sessionStorage.removeItem('authToken');
+    // authToken = null;
+    // window.location.href = '/';
+}
         
         // Toggle threshold field based on method
         document.getElementById('anomalyMethod').addEventListener('change', function() {
@@ -212,18 +230,26 @@
         });
         
         async function loadForecast() {
-            checkAuth();
+            // Always refresh token before API call
+            authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+            if (!authToken) {
+                console.warn('No auth token found');
+                return;
+            }
+            
             const hours = document.getElementById('forecastHours').value;
             const useML = document.getElementById('useML').value;
             
             try {
+                // Refresh token again right before the call
+                authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
                 const response = await fetch(`/api/load-forecast?hours_ahead=${hours}&use_ml=${useML}`, {
                     headers: {'Authorization': `Bearer ${authToken}`},
                     credentials: 'include'
                 });
                 
                 if (response.status === 401) {
-                    window.location.href = '/';
+                    handleAuthFailure();
                     return;
                 }
                 
@@ -299,7 +325,13 @@
         }
         
         async function loadAnomalies() {
-            checkAuth();
+            // Always refresh token before API call
+            authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+            if (!authToken) {
+                console.warn('No auth token found');
+                return;
+            }
+            
             const sensorId = document.getElementById('anomalySensorId').value;
             const threshold = document.getElementById('anomalyThreshold').value;
             const method = document.getElementById('anomalyMethod').value;
@@ -321,13 +353,15 @@
                     }
                 }
                 
+                // Refresh token again right before the call
+                authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
                 const response = await fetch(url, {
                     headers: {'Authorization': `Bearer ${authToken}`},
                     credentials: 'include'
                 });
                 
                 if (response.status === 401) {
-                    window.location.href = '/';
+                    handleAuthFailure();
                     return;
                 }
                 
@@ -404,17 +438,25 @@
         }
         
         async function loadTrends() {
-            checkAuth();
+            // Always refresh token before API call
+            authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+            if (!authToken) {
+                console.warn('No auth token found');
+                return;
+            }
+            
             const days = document.getElementById('trendDays').value;
             
             try {
+                // Refresh token again right before the call
+                authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
                 const response = await fetch(`/api/consumption-trends?days=${days}`, {
                     headers: {'Authorization': `Bearer ${authToken}`},
                     credentials: 'include'
                 });
                 
                 if (response.status === 401) {
-                    window.location.href = '/';
+                    handleAuthFailure();
                     return;
                 }
                 
@@ -480,8 +522,11 @@
             });
         }
         
-        // Auto-load on page load
+        // Auto-load on page load - don't redirect, just try to load data
         window.addEventListener('load', () => {
+            // Re-check token on load
+            authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+            // Always try to load - if token is missing, API will return 401 and we'll handle it
             if (authToken) {
                 loadForecast();
                 loadAnomalies();
@@ -492,13 +537,16 @@
                 }
                 
                 refreshInterval = setInterval(() => {
-                    checkAuth();
-                    loadForecast();
-                    loadAnomalies();
-                    loadTrends();
+                    authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+                    if (authToken) {
+                        loadForecast();
+                        loadAnomalies();
+                        loadTrends();
+                    }
                 }, 60000);
             } else {
-                window.location.href = '/';
+                // No token - show message but don't redirect immediately
+                console.warn('No authentication token found. Please log in.');
             }
         });
         

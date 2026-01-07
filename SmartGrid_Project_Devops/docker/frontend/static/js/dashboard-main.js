@@ -5,13 +5,45 @@ let sensorStatsChart = null;
 let realtimeChart = null;
 let refreshInterval = null;
 
-// Check for saved token
-const savedToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-if (savedToken) {
-    authToken = savedToken;
-    document.getElementById('loginSection').classList.add('hidden');
-    document.getElementById('dashboardContent').classList.remove('hidden');
-    loadDashboard();
+// Global logout helper so we can clear tokens easily
+function logout() {
+    try { localStorage.removeItem('authToken'); } catch (e) {}
+    try { sessionStorage.removeItem('authToken'); } catch (e) {}
+    authToken = null;
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+    window.location.href = '/';
+}
+
+// Make logout available globally
+window.logout = logout;
+
+// Check for saved token - run on page load to ensure DOM is ready
+function checkAuthOnLoad() {
+    const savedToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    if (savedToken) {
+        authToken = savedToken;
+        const loginSection = document.getElementById('loginSection');
+        const dashboardContent = document.getElementById('dashboardContent');
+        if (loginSection) loginSection.classList.add('hidden');
+        if (dashboardContent) dashboardContent.classList.remove('hidden');
+        loadDashboard();
+    } else {
+        // No token - show login form
+        const loginSection = document.getElementById('loginSection');
+        const dashboardContent = document.getElementById('dashboardContent');
+        if (loginSection) loginSection.classList.remove('hidden');
+        if (dashboardContent) dashboardContent.classList.add('hidden');
+    }
+}
+
+// Run check when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkAuthOnLoad);
+} else {
+    checkAuthOnLoad();
 }
 
 // Login form handler
@@ -38,9 +70,12 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
             authToken = data.token;
             localStorage.setItem('authToken', authToken);
             sessionStorage.setItem('authToken', authToken);
-            document.getElementById('loginSection').classList.add('hidden');
-            document.getElementById('dashboardContent').classList.remove('hidden');
-            document.getElementById('userInfo').textContent = `👤 ${data.user.username}`;
+            const loginSection = document.getElementById('loginSection');
+            const dashboardContent = document.getElementById('dashboardContent');
+            const userInfo = document.getElementById('userInfo');
+            if (loginSection) loginSection.classList.add('hidden');
+            if (dashboardContent) dashboardContent.classList.remove('hidden');
+            if (userInfo) userInfo.textContent = `👤 ${data.user.username}`;
             loadDashboard();
         } else {
             showAlert('loginAlert', data.error || 'Login failed', 'danger');
@@ -55,7 +90,12 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
 // Load dashboard data
 async function loadDashboard() {
-    if (!authToken) return;
+    // Always refresh token before loading
+    authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    if (!authToken) {
+        console.warn('No auth token found');
+        return;
+    }
     
     try {
         await Promise.all([
@@ -79,7 +119,16 @@ async function loadDashboard() {
 
 // Load statistics
 async function loadStats() {
+    // Always refresh token before API call
+    authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    if (!authToken) {
+        console.warn('No auth token found');
+        return;
+    }
+    
     try {
+        // Refresh token again right before the call
+        authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
         const response = await fetch('/api/sensor-stats?hours=24', {
             headers: {'Authorization': `Bearer ${authToken}`}
         });
@@ -102,7 +151,16 @@ async function loadStats() {
 
 // Load forecast
 async function loadForecast(hours = 24) {
+    // Always refresh token before API call
+    authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    if (!authToken) {
+        console.warn('No auth token found');
+        return;
+    }
+    
     try {
+        // Refresh token again right before the call
+        authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
         const response = await fetch(`/api/load-forecast?hours_ahead=${hours}&use_ml=true`, {
             headers: {'Authorization': `Bearer ${authToken}`}
         });
@@ -151,7 +209,16 @@ function updateForecastChart(forecast) {
 
 // Load sensor stats
 async function loadSensorStats() {
+    // Always refresh token before API call
+    authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    if (!authToken) {
+        console.warn('No auth token found');
+        return;
+    }
+    
     try {
+        // Refresh token again right before the call
+        authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
         const response = await fetch('/api/sensor-stats?hours=24', {
             headers: {'Authorization': `Bearer ${authToken}`}
         });
@@ -203,7 +270,16 @@ function updateSensorStatsChart(stats) {
 
 // Load realtime data
 async function loadRealtimeData() {
+    // Always refresh token before API call
+    authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    if (!authToken) {
+        console.warn('No auth token found');
+        return;
+    }
+    
     try {
+        // Refresh token again right before the call
+        authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
         const response = await fetch('/api/sensor-stats?hours=1', {
             headers: {'Authorization': `Bearer ${authToken}`}
         });
@@ -266,7 +342,16 @@ function updateRealtimeChart(stats) {
 
 // Load anomalies
 async function loadAnomalies() {
+    // Always refresh token before API call
+    authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    if (!authToken) {
+        console.warn('No auth token found');
+        return;
+    }
+    
     try {
+        // Refresh token again right before the call
+        authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
         const response = await fetch('/api/anomalies', {
             headers: {'Authorization': `Bearer ${authToken}`}
         });
@@ -304,7 +389,16 @@ function updateAnomaliesList(anomalies) {
 
 // Load recent data
 async function loadRecentData(limit = 10) {
+    // Always refresh token before API call
+    authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    if (!authToken) {
+        console.warn('No auth token found');
+        return;
+    }
+    
     try {
+        // Refresh token again right before the call
+        authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
         const response = await fetch(`/api/sensor-stats?hours=24`, {
             headers: {'Authorization': `Bearer ${authToken}`}
         });

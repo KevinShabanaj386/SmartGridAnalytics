@@ -109,9 +109,14 @@ def get_sensor_stats():
     """Merr statistikat e sensorëve"""
     try:
         headers = {}
-        token = user_token or session.get('token')
-        if token:
-            headers['Authorization'] = f'Bearer {token}'
+        # Get token from request header first (sent by browser), then fallback to session
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            headers['Authorization'] = auth_header
+        else:
+            token = user_token or session.get('token')
+            if token:
+                headers['Authorization'] = f'Bearer {token}'
         
         hours = request.args.get('hours', 24)
         response = requests.get(
@@ -134,9 +139,14 @@ def get_load_forecast():
     """Merr parashikimin e ngarkesës"""
     try:
         headers = {}
-        token = user_token or session.get('token')
-        if token:
-            headers['Authorization'] = f'Bearer {token}'
+        # Get token from request header first (sent by browser), then fallback to session
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            headers['Authorization'] = auth_header
+        else:
+            token = user_token or session.get('token')
+            if token:
+                headers['Authorization'] = f'Bearer {token}'
         
         hours_ahead = request.args.get('hours_ahead', 24)
         use_ml = request.args.get('use_ml', 'true')
@@ -161,9 +171,14 @@ def get_anomalies():
     """Merr anomalitë (Z-Score method)"""
     try:
         headers = {}
-        token = user_token or session.get('token')
-        if token:
-            headers['Authorization'] = f'Bearer {token}'
+        # Get token from request header first (sent by browser), then fallback to session
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            headers['Authorization'] = auth_header
+        else:
+            token = user_token or session.get('token')
+            if token:
+                headers['Authorization'] = f'Bearer {token}'
         
         sensor_id = request.args.get('sensor_id')
         threshold = request.args.get('threshold', '3.0')
@@ -223,9 +238,14 @@ def get_anomalies_ml():
     """Merr anomalitë duke përdorur Random Forest ML model"""
     try:
         headers = {}
-        token = user_token or session.get('token')
-        if token:
-            headers['Authorization'] = f'Bearer {token}'
+        # Get token from request header first (sent by browser), then fallback to session
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            headers['Authorization'] = auth_header
+        else:
+            token = user_token or session.get('token')
+            if token:
+                headers['Authorization'] = f'Bearer {token}'
         
         sensor_id = request.args.get('sensor_id')
         hours = request.args.get('hours', 24)
@@ -254,9 +274,14 @@ def get_consumption_trends():
     """Merr trendet e konsumit"""
     try:
         headers = {}
-        token = user_token or session.get('token')
-        if token:
-            headers['Authorization'] = f'Bearer {token}'
+        # Get token from request header first (sent by browser), then fallback to session
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            headers['Authorization'] = auth_header
+        else:
+            token = user_token or session.get('token')
+            if token:
+                headers['Authorization'] = f'Bearer {token}'
         
         days = request.args.get('days', 30)
         customer_id = request.args.get('customer_id')

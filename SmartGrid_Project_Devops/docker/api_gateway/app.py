@@ -132,8 +132,9 @@ def verify_jwt_token(token: Optional[str]) -> bool:
             token = token[7:]
         
         # Verifikon token me user-management service
+        user_mgmt_url = get_service_url('user-management')
         response = requests.get(
-            f"{SERVICES['user-management']}/api/v1/auth/verify",
+            f"{user_mgmt_url}/api/v1/auth/verify",
             headers={'Authorization': f'Bearer {token}'},
             timeout=2
         )

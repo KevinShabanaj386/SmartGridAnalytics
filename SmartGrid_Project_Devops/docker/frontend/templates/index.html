@@ -8,18 +8,19 @@
     <link rel="stylesheet" href="/static/css/simple-style.css">
 </head>
 <body>
+    <div class="container">
         <div class="header">
-        <h1>⚡ Smart Grid Analytics</h1>
-        <nav class="nav">
-            <a href="/" class="active">Dashboard</a>
+            <h1>⚡ Smart Grid Analytics</h1>
+            <nav class="nav">
+                <a href="/" class="active">Dashboard</a>
                 <a href="/dashboard">Statistikat</a>
                 <a href="/analytics">Analiza</a>
                 <a href="/sensors">Sensorët</a>
-            <a href="/kosovo">🇽🇰 Kosovo</a>
+                <a href="/kosovo">🇽🇰 Kosovo</a>
+                <button class="btn btn-sm btn-outline" style="margin-left:auto;" onclick="logout()">Logout</button>
             </nav>
         </div>
-        
-    <div class="container">
+
         <!-- Login Section -->
         <div id="loginSection" class="card" style="max-width: 400px; margin: 2rem auto;">
             <h3>🔐 Hyrje në Sistem</h3>
@@ -35,21 +36,21 @@
                 </div>
                 <button type="submit" class="btn" style="width: 100%;">Hyr</button>
             </form>
-            </div>
-            
+        </div>
+        
         <!-- Dashboard Content -->
         <div id="dashboardContent" class="hidden">
             <!-- User Info & Actions -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                 <div>
                     <span id="userInfo" style="font-weight: 600; color: var(--text-light);"></span>
-                    </div>
+                </div>
                 <div class="btn-group">
                     <button class="btn btn-sm btn-outline" onclick="refreshAll()">🔄 Refresh</button>
                     <button class="btn btn-sm btn-secondary" onclick="exportData()">📥 Export</button>
                     <button class="btn btn-sm btn-secondary" onclick="showSettings()">⚙️ Settings</button>
-                    </div>
-    </div>
+                </div>
+            </div>
     
             <!-- Quick Stats -->
             <div class="stats-grid" id="statsGrid">
@@ -112,7 +113,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <h3>⚠️ Anomalitë</h3>
                         <button class="btn btn-sm btn-outline" onclick="loadAnomalies()">🔄 Refresh</button>
-                        </div>
+                    </div>
                     <div id="anomaliesList">
                         <div class="empty-state">
                             <div class="empty-state-icon">📊</div>
@@ -120,7 +121,7 @@
                         </div>
                     </div>
                 </div>
-                    </div>
+            </div>
 
             <!-- Data Table -->
             <div class="card">

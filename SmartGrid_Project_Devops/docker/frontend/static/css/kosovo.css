@@ -1,4 +1,56 @@
 /* Kosovo Data Dashboard Styles */
+/* Shared dropdown styles for Kosovo Electricity navbar */
+.nav-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.nav-dropbtn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 0.375rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.nav-dropbtn.active {
+    background: var(--primary);
+    color: #fff;
+}
+
+.nav-dropdown-content {
+    display: none;
+    position: absolute;
+    background: var(--card-bg);
+    min-width: 180px;
+    box-shadow: var(--shadow);
+    border-radius: 0.5rem;
+    z-index: 10;
+    margin-top: 0.25rem;
+}
+
+.nav-dropdown-content a {
+    display: block;
+    padding: 0.5rem 1rem;
+    color: var(--text-light);
+    text-decoration: none;
+    border-radius: 0;
+}
+
+.nav-dropdown-content a:hover {
+    background: var(--bg);
+    color: var(--primary);
+}
+
+.nav-dropdown:hover .nav-dropdown-content {
+    display: block;
+}
+
+.nav-dropdown:hover .nav-dropbtn {
+    background: var(--primary-dark);
+}
 
 .card-actions {
     display: flex;
