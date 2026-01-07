@@ -387,7 +387,22 @@ def login():
         if MONGODB_AUDIT_AVAILABLE:
             create_audit_log_mongodb(**audit_data)
         
-        return jsonify({
+        # Behavioral Analytics - detektim anomalish
+        behavioral_warning = None
+        if BEHAVIORAL_ANALYTICS_AVAILABLE:
+            try:
+                features = get_user_behavior_features(user['id'], request.remote_addr, request.headers.get('User-Agent'))
+                anomalies = detect_behavioral_anomalies(user['id'], features)
+                if anomalies:
+                    behavioral_warning = {
+                        'risk_score': calculate_user_risk_score(user['id']),
+                        'anomalies': anomalies
+                    }
+            except Exception as e:
+                logger.warning(f"Behavioral analytics error: {e}")
+        
+        # Krijo response
+        response_data = {
             'status': 'success',
             'token': token,
             'token_type': 'Bearer',
