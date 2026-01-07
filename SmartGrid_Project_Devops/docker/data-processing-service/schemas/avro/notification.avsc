@@ -1,0 +1,58 @@
+{
+  "type": "record",
+  "name": "Notification",
+  "namespace": "com.smartgrid.analytics",
+  "fields": [
+    {
+      "name": "notification_id",
+      "type": "string",
+      "doc": "Unique identifier for the notification"
+    },
+    {
+      "name": "type",
+      "type": "string",
+      "doc": "Type of notification (alert, warning, info)"
+    },
+    {
+      "name": "severity",
+      "type": "string",
+      "doc": "Severity level (critical, high, medium, low)"
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "doc": "Notification title"
+    },
+    {
+      "name": "message",
+      "type": "string",
+      "doc": "Notification message content"
+    },
+    {
+      "name": "recipient",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Recipient identifier (user_id, email, etc.)"
+    },
+    {
+      "name": "channel",
+      "type": "string",
+      "doc": "Delivery channel (email, sms, webhook, push)"
+    },
+    {
+      "name": "timestamp",
+      "type": "string",
+      "doc": "ISO 8601 timestamp of the notification"
+    },
+    {
+      "name": "metadata",
+      "type": {
+        "type": "map",
+        "values": "string"
+      },
+      "default": {},
+      "doc": "Additional metadata as key-value pairs"
+    }
+  ]
+}
+

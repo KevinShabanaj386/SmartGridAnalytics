@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 COPY schema_registry_client.py .
 COPY dlq_handler.py .
-COPY ../../schemas/avro/ /app/schemas/avro/
+COPY schemas/avro/ /app/schemas/avro/
 
 CMD ["python", "app.py"]
 

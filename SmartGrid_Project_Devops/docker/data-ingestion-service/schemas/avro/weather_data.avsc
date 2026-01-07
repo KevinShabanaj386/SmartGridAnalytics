@@ -1,0 +1,50 @@
+{
+  "type": "record",
+  "name": "WeatherData",
+  "namespace": "com.smartgrid.analytics",
+  "fields": [
+    {
+      "name": "temperature",
+      "type": "double",
+      "doc": "Temperature in Celsius"
+    },
+    {
+      "name": "humidity",
+      "type": "double",
+      "doc": "Humidity percentage (0-100)"
+    },
+    {
+      "name": "pressure",
+      "type": "double",
+      "doc": "Atmospheric pressure in hPa"
+    },
+    {
+      "name": "wind_speed",
+      "type": "double",
+      "doc": "Wind speed in m/s"
+    },
+    {
+      "name": "wind_direction",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Wind direction in degrees (0-360)"
+    },
+    {
+      "name": "weather_condition",
+      "type": "string",
+      "doc": "Weather condition (e.g., Sunny, Cloudy, Rainy)"
+    },
+    {
+      "name": "timestamp",
+      "type": "string",
+      "doc": "ISO 8601 timestamp of the weather reading"
+    },
+    {
+      "name": "location",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Location identifier or coordinates"
+    }
+  ]
+}
+

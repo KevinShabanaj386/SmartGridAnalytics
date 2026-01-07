@@ -156,8 +156,34 @@ def _get_from_cache(cache_key: str) -> Optional[Any]:
     return None
 
 def _write_through_cache(cache_key: str, data: Any, ttl: int):
-    """Write-through caching: shkruan në të dy cache-et (Redis dhe Memcached)"""
-    cache_data_str = json.dumps(data, default=str)
+    """
+    Write-through caching: shkruan në të dy cache-et (Redis dhe Memcached)
+    
+    SECURITY FIX: Sigurohet që data është e serializueshme para se të shkruhet në cache.
+    Nëse data është Response object, ekstraktohet para serializimit.
+    """
+    # SECURITY FIX: Ekstrakto të dhënat nëse është Response object
+    if isinstance(data, Response):
+        try:
+            data = json.loads(data.get_data(as_text=True))
+        except (json.JSONDecodeError, AttributeError):
+            data = data.get_data(as_text=True) if hasattr(data, 'get_data') else str(data)
+    elif isinstance(data, tuple) and len(data) == 2:
+        # Nëse është tuple (Response, status_code), ekstrakto të dhënat
+        response_obj, status_code = data
+        if isinstance(response_obj, Response):
+            try:
+                data = json.loads(response_obj.get_data(as_text=True))
+            except (json.JSONDecodeError, AttributeError):
+                data = response_obj.get_data(as_text=True) if hasattr(response_obj, 'get_data') else str(response_obj)
+    
+    # Serializo të dhënat (tani sigurisht nuk është Response object)
+    try:
+        cache_data_str = json.dumps(data, default=str)
+    except (TypeError, ValueError) as e:
+        logger.error(f"Error serializing data for cache: {e}. Data type: {type(data)}")
+        # Fallback: konverto në string nëse serializimi dështon
+        cache_data_str = json.dumps(str(data), default=str)
     
     # Shkruaj në Redis
     if redis_client:
@@ -212,10 +238,11 @@ def cache_result(ttl: int = CACHE_TTL):
             try:
                 result = func(*args, **kwargs)
                 
-                # Ekstrakto të dhënat dhe status_code
+                # SECURITY FIX: Ekstrakto të dhënat dhe status_code para se të ruhen në cache
+                # Kjo siguron që Response objects nuk shkruhen direkt në cache
                 data, status_code = _extract_response_data(result)
                 
-                # Përgatit të dhënat për cache
+                # Përgatit të dhënat për cache (tani data është e sigurt për serializim)
                 if status_code is not None:
                     if isinstance(data, dict):
                         cache_data = {**data, '_status_code': status_code}
@@ -224,13 +251,29 @@ def cache_result(ttl: int = CACHE_TTL):
                 else:
                     cache_data = data
                 
+                # SECURITY FIX: Verifikoni që cache_data nuk është Response object
+                # Nëse është, ekstrakto të dhënat përsëri
+                if isinstance(cache_data, Response):
+                    logger.warning(f"Response object detected in cache_data for {func.__name__}, extracting data...")
+                    cache_data, _ = _extract_response_data(cache_data)
+                elif isinstance(cache_data, tuple) and len(cache_data) == 2:
+                    response_obj, status = cache_data
+                    if isinstance(response_obj, Response):
+                        logger.warning(f"Response object in tuple detected for {func.__name__}, extracting data...")
+                        cache_data, _ = _extract_response_data(cache_data)
+                
                 # Write-through: shkruaj në të dy cache-et
+                # _write_through_cache tani ka edhe më shumë mbrojtje kundër Response objects
                 _write_through_cache(full_key, cache_data, ttl)
                 
                 return result
             except Exception as e:
                 logger.error(f"Error executing function {func.__name__}: {e}")
-                raise
+                # Nëse ka problem me caching, kthe rezultatin pa cache (fail gracefully)
+                try:
+                    return func(*args, **kwargs)
+                except:
+                    raise
         
         return wrapper
     return decorator
