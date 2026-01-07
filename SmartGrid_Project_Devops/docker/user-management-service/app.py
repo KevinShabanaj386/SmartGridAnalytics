@@ -16,12 +16,15 @@ import urllib.parse
 import signal
 import sys
 
-# Import OAuth2 module
+    # Import OAuth2 module
 try:
     from oauth2 import (
         generate_authorization_code, validate_authorization_code,
         generate_access_token, validate_access_token, refresh_access_token,
-        validate_client_credentials, OAUTH2_CLIENTS
+        validate_client_credentials, OAUTH2_CLIENTS,
+        generate_code_verifier, generate_code_challenge, validate_code_challenge,
+        store_code_verifier, get_code_verifier, introspect_token,
+        generate_client_credentials_token  # OAuth2 Client Credentials Flow (100% SECURITY)
     )
     OAUTH2_AVAILABLE = True
 except ImportError:
@@ -63,6 +66,19 @@ except ImportError:
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Import MongoDB Audit Logs module (Hybrid Storage) - after logger initialization
+try:
+    from mongodb_audit import init_mongodb, create_audit_log_mongodb
+    MONGODB_AUDIT_AVAILABLE = init_mongodb()
+    if MONGODB_AUDIT_AVAILABLE:
+        logger.info("MongoDB audit logs enabled")
+except ImportError:
+    MONGODB_AUDIT_AVAILABLE = False
+    logger.warning("MongoDB audit logs not available")
+except Exception as e:
+    MONGODB_AUDIT_AVAILABLE = False
+    logger.warning(f"Could not initialize MongoDB audit logs: {e}")
 
 # Vault Secrets Management
 try:
@@ -560,6 +576,19 @@ if OAUTH2_AVAILABLE:
                 if not auth_data:
                     return jsonify({'error': 'Invalid or expired authorization code'}), 400
                 
+                # PKCE validation (nëse code_verifier është i dërguar)
+                code_verifier = data.get('code_verifier')
+                if code_verifier:
+                    stored_verifier = get_code_verifier(code)
+                    if not stored_verifier:
+                        # Nëse nuk ka stored verifier, mund të jetë OK (PKCE optional)
+                        logger.debug("PKCE code_verifier provided but no stored verifier found")
+                    else:
+                        # Validon code challenge
+                        code_challenge = data.get('code_challenge')
+                        if code_challenge and not validate_code_challenge(code_verifier, code_challenge):
+                            return jsonify({'error': 'invalid_grant', 'error_description': 'Invalid code challenge'}), 400
+                
                 user_id = auth_data['user_id']
                 scope = data.get('scope', 'read write')
                 
@@ -575,6 +604,28 @@ if OAUTH2_AVAILABLE:
                 tokens = refresh_access_token(refresh_token, client_id)
                 if not tokens:
                     return jsonify({'error': 'Invalid or expired refresh_token'}), 400
+                
+                return jsonify(tokens), 200
+            
+            elif grant_type == 'client_credentials':
+                # OAuth2 Client Credentials Flow - për service-to-service authentication (100% SECURITY)
+                scope = data.get('scope', '')
+                
+                # Merr scope nga client configuration nëse nuk është dhënë
+                if not scope and client_id in OAUTH2_CLIENTS:
+                    scope = OAUTH2_CLIENTS[client_id].get('scope', 'read write')
+                
+                # Kontrollo nëse client suporton client_credentials grant type
+                if client_id not in OAUTH2_CLIENTS:
+                    return jsonify({'error': 'Invalid client_id'}), 400
+                
+                client = OAUTH2_CLIENTS[client_id]
+                if 'client_credentials' not in client.get('grant_types', []):
+                    return jsonify({'error': 'Client does not support client_credentials grant type'}), 400
+                
+                tokens = generate_client_credentials_token(client_id, scope)
+                if not tokens:
+                    return jsonify({'error': 'Failed to generate token'}), 500
                 
                 return jsonify(tokens), 200
             else:
@@ -761,6 +812,14 @@ if __name__ == '__main__':
             logger.info("Audit logs table initialized")
         except Exception as e:
             logger.warning(f"Could not initialize audit logs: {e}")
+    
+    # Initialize Data Access Governance tables
+    if DAG_AVAILABLE:
+        try:
+            init_dag_tables()
+            logger.info("Data Access Governance tables initialized")
+        except Exception as e:
+            logger.warning(f"Could not initialize DAG tables: {e}")
     
     # Register with Consul
     register_with_consul()

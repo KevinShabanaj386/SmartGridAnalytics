@@ -143,17 +143,36 @@ def verify_jwt_token(token: Optional[str]) -> bool:
         logger.error(f"Error verifying JWT token: {str(e)}")
         return False
 
+# Zero Trust Architecture
+try:
+    from zero_trust import require_zero_trust, get_zero_trust_stats
+    ZERO_TRUST_AVAILABLE = True
+    logger.info("Zero Trust Architecture enabled")
+except ImportError:
+    ZERO_TRUST_AVAILABLE = False
+    logger.warning("Zero Trust module not available")
+    def require_zero_trust(f):
+        return f
+    def get_zero_trust_stats():
+        return {'enabled': False}
+
 def require_auth(f):
     """Decorator për kërkesat që kërkojnë autentikim"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         # Përjashto health checks dhe auth endpoints
-        if request.path in ['/health', '/api/v1/auth/login', '/api/v1/auth/register']:
+        if request.path in ['/health', '/api/v1/auth/login', '/api/v1/auth/register', '/metrics']:
             return f(*args, **kwargs)
         
-        token = request.headers.get('Authorization')
-        if not token or not verify_jwt_token(token):
-            return jsonify({'error': 'Unauthorized'}), 401
+        # Përdor Zero Trust nëse është i disponueshëm
+        if ZERO_TRUST_AVAILABLE:
+            # Zero Trust do të verifikojë token dhe behavior
+            return require_zero_trust(f)(*args, **kwargs)
+        else:
+            # Fallback në basic JWT verification
+            token = request.headers.get('Authorization')
+            if not token or not verify_jwt_token(token):
+                return jsonify({'error': 'Unauthorized'}), 401
         
         return f(*args, **kwargs)
     

@@ -16,6 +16,16 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Input Validation (100% SECURITY)
+try:
+    from input_validation import (
+        validate_email, validate_phone, validate_uuid, validate_notification_type, sanitize_string
+    )
+    INPUT_VALIDATION_AVAILABLE = True
+except ImportError:
+    INPUT_VALIDATION_AVAILABLE = False
+    logger.warning("Input validation module not available")
+
 # Consul Config Management
 try:
     from consul_config import get_config

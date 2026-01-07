@@ -1,11 +1,11 @@
 """
-MongoDB Audit Logs - Hybrid Storage Model
-Ruaj audit logs në MongoDB për fleksibilitet dhe shkallëzim
+MongoDB Audit Logs për Hybrid Storage Models
+Ruaj audit logs në MongoDB për redundancy dhe performancë
 """
-import logging
 import os
-from datetime import datetime
+import logging
 from typing import Optional, Dict, Any
+from datetime import datetime
 import json
 
 logger = logging.getLogger(__name__)
@@ -16,56 +16,60 @@ MONGODB_PORT = int(os.getenv('MONGODB_PORT', 27017))
 MONGODB_DB = os.getenv('MONGODB_DB', 'smartgrid_audit')
 MONGODB_USER = os.getenv('MONGODB_USER', 'smartgrid')
 MONGODB_PASSWORD = os.getenv('MONGODB_PASSWORD', 'smartgrid123')
-USE_MONGODB = os.getenv('USE_MONGODB_AUDIT', 'true').lower() == 'true'
+USE_MONGODB_AUDIT = os.getenv('USE_MONGODB_AUDIT', 'true').lower() == 'true'
 
-# MongoDB client
-mongodb_client = None
-mongodb_db = None
+_mongodb_client = None
+_mongodb_db = None
 
-def init_mongodb():
-    """Inicializon MongoDB client"""
-    global mongodb_client, mongodb_db
+def init_mongodb() -> bool:
+    """Inicializon MongoDB client dhe database"""
+    global _mongodb_client, _mongodb_db
     
-    if not USE_MONGODB:
+    if not USE_MONGODB_AUDIT:
+        logger.debug("MongoDB audit logs disabled by environment variable")
         return False
     
     try:
         from pymongo import MongoClient
-        from pymongo.errors import ConnectionFailure
+        from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
         
-        # Krijo connection string
-        connection_string = f"mongodb://{MONGODB_USER}:{MONGODB_PASSWORD}@{MONGODB_HOST}:{MONGODB_PORT}/{MONGODB_DB}?authSource=admin"
+        # Krijo MongoDB connection string
+        if MONGODB_USER and MONGODB_PASSWORD:
+            connection_string = f"mongodb://{MONGODB_USER}:{MONGODB_PASSWORD}@{MONGODB_HOST}:{MONGODB_PORT}/{MONGODB_DB}?authSource=admin"
+        else:
+            connection_string = f"mongodb://{MONGODB_HOST}:{MONGODB_PORT}/{MONGODB_DB}"
         
-        mongodb_client = MongoClient(
+        # Krijo client
+        _mongodb_client = MongoClient(
             connection_string,
-            serverSelectionTimeoutMS=5000
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=5000
         )
         
         # Test connection
-        mongodb_client.admin.command('ping')
+        _mongodb_client.admin.command('ping')
         
-        mongodb_db = mongodb_client[MONGODB_DB]
+        # Merr database
+        _mongodb_db = _mongodb_client[MONGODB_DB]
         
-        # Krijo indexes
-        mongodb_db.audit_logs.create_index([("timestamp", -1)])
-        mongodb_db.audit_logs.create_index([("user_id", 1)])
-        mongodb_db.audit_logs.create_index([("event_type", 1)])
-        mongodb_db.audit_logs.create_index([("username", 1)])
+        # Krijo collection dhe indexes
+        collection = _mongodb_db['audit_logs']
+        collection.create_index([('timestamp', -1)])
+        collection.create_index([('user_id', 1)])
+        collection.create_index([('event_type', 1)])
+        collection.create_index([('timestamp', -1), ('user_id', 1)])
         
-        logger.info(f"MongoDB connected: {MONGODB_HOST}:{MONGODB_PORT}/{MONGODB_DB}")
+        logger.info(f"MongoDB audit logs initialized: {MONGODB_HOST}:{MONGODB_PORT}/{MONGODB_DB}")
         return True
         
     except ImportError:
-        logger.warning("pymongo not installed, MongoDB audit logs disabled")
-        mongodb_client = None
+        logger.warning("pymongo not installed. MongoDB audit logs disabled.")
         return False
-    except ConnectionFailure as e:
-        logger.warning(f"Could not connect to MongoDB: {e}")
-        mongodb_client = None
+    except (ConnectionFailure, ServerSelectionTimeoutError) as e:
+        logger.warning(f"Could not connect to MongoDB at {MONGODB_HOST}:{MONGODB_PORT}: {e}")
         return False
     except Exception as e:
-        logger.warning(f"Error initializing MongoDB: {e}")
-        mongodb_client = None
+        logger.error(f"Error initializing MongoDB audit logs: {e}")
         return False
 
 def create_audit_log_mongodb(
@@ -86,11 +90,16 @@ def create_audit_log_mongodb(
     """
     Krijo audit log në MongoDB
     """
-    if not mongodb_db:
+    global _mongodb_client, _mongodb_db
+    
+    if not USE_MONGODB_AUDIT or not _mongodb_db:
         return False
     
     try:
-        audit_log = {
+        collection = _mongodb_db['audit_logs']
+        
+        # Krijo document
+        log_document = {
             'event_type': event_type,
             'action': action,
             'user_id': user_id,
@@ -108,50 +117,12 @@ def create_audit_log_mongodb(
             'created_at': datetime.utcnow()
         }
         
-        # Insert në MongoDB
-        result = mongodb_db.audit_logs.insert_one(audit_log)
+        # Insert document
+        collection.insert_one(log_document)
         
-        logger.debug(f"MongoDB audit log created: {event_type} - {action} (ID: {result.inserted_id})")
+        logger.debug(f"MongoDB audit log created: {event_type} - {action}")
         return True
         
     except Exception as e:
-        logger.error(f"Error creating MongoDB audit log: {str(e)}")
+        logger.error(f"Error creating MongoDB audit log: {e}")
         return False
-
-def get_audit_logs_mongodb(
-    user_id: Optional[int] = None,
-    event_type: Optional[str] = None,
-    limit: int = 100,
-    skip: int = 0
-) -> list:
-    """
-    Merr audit logs nga MongoDB
-    """
-    if not mongodb_db:
-        return []
-    
-    try:
-        query = {}
-        if user_id:
-            query['user_id'] = user_id
-        if event_type:
-            query['event_type'] = event_type
-        
-        cursor = mongodb_db.audit_logs.find(query).sort('timestamp', -1).skip(skip).limit(limit)
-        
-        logs = []
-        for log in cursor:
-            # Konverto ObjectId në string
-            log['_id'] = str(log['_id'])
-            # Konverto datetime në ISO format
-            if 'timestamp' in log:
-                log['timestamp'] = log['timestamp'].isoformat()
-            if 'created_at' in log:
-                log['created_at'] = log['created_at'].isoformat()
-            logs.append(log)
-        
-        return logs
-        
-    except Exception as e:
-        logger.error(f"Error getting MongoDB audit logs: {str(e)}")
-        return []
