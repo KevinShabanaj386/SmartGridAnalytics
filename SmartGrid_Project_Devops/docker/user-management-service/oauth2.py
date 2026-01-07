@@ -8,8 +8,23 @@ from typing import Dict, Optional
 import secrets
 import hashlib
 import logging
+import os
 
 logger = logging.getLogger(__name__)
+
+# JWT Secret - Merr nga Vault ose environment variable (SECURITY FIX)
+def get_jwt_secret() -> str:
+    """Merr JWT secret nga Vault ose environment variable"""
+    try:
+        from vault_client import get_jwt_secret as vault_get_jwt_secret
+        secret = vault_get_jwt_secret()
+        if secret:
+            return secret
+    except ImportError:
+        pass
+    
+    # Fallback në environment variable
+    return os.getenv('JWT_SECRET', 'your-secret-key-change-in-production')
 
 # OAuth2 Configuration
 OAUTH2_CLIENTS = {
@@ -65,7 +80,7 @@ def validate_authorization_code(code: str, client_id: str, redirect_uri: str) ->
 
 def generate_access_token(user_id: str, client_id: str, scope: str = 'read write') -> Dict[str, str]:
     """Gjeneron access token dhe refresh token"""
-    jwt_secret = 'your-secret-key-change-in-production'
+    jwt_secret = get_jwt_secret()  # SECURITY FIX: Merr nga Vault
     
     # Access token (1 orë)
     access_token_payload = {
@@ -99,7 +114,7 @@ def generate_access_token(user_id: str, client_id: str, scope: str = 'read write
 def validate_access_token(token: str) -> Optional[Dict]:
     """Validon access token"""
     try:
-        jwt_secret = 'your-secret-key-change-in-production'
+        jwt_secret = get_jwt_secret()  # SECURITY FIX: Merr nga Vault
         payload = jwt.decode(token, jwt_secret, algorithms=['HS256'])
         return payload
     except jwt.ExpiredSignatureError:
@@ -110,7 +125,7 @@ def validate_access_token(token: str) -> Optional[Dict]:
 def refresh_access_token(refresh_token: str, client_id: str) -> Optional[Dict[str, str]]:
     """Refresh access token me refresh token"""
     try:
-        jwt_secret = 'your-secret-key-change-in-production'
+        jwt_secret = get_jwt_secret()  # SECURITY FIX: Merr nga Vault
         payload = jwt.decode(refresh_token, jwt_secret, algorithms=['HS256'])
         
         if payload.get('type') != 'refresh':

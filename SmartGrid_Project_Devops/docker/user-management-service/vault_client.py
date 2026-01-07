@@ -117,6 +117,7 @@ def get_jwt_secret() -> Optional[str]:
     secret = read_secret('secret/data/smartgrid/jwt', 'secret')
     if secret:
         return secret
+    # Fallback në environment variable (në prodhim, duhet të jetë në Vault)
     return os.getenv('JWT_SECRET', 'your-secret-key-change-in-production')
 
 def get_kafka_credentials() -> Optional[Dict[str, str]]:
