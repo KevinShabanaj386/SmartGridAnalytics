@@ -391,6 +391,48 @@ def get_kosovo_prices():
             'error': str(e)
         }), 500
 
+
+@app.route('/api/kosovo/prices/historical', methods=['GET'])
+def get_kosovo_prices_historical():
+    """Merr trendet afatgjata të çmimeve të energjisë për Kosovën (2010–sot)."""
+    try:
+        from_year = request.args.get('from_year', '2010')
+        to_year = request.args.get('to_year', str(datetime.utcnow().year))
+        params = {'from_year': from_year, 'to_year': to_year}
+
+        # Try configured URL first
+        try:
+            response = requests.get(
+                f'{KOSOVO_PRICE_URL}/api/v1/prices/historical',
+                params=params,
+                timeout=10
+            )
+            if response.status_code == 200:
+                return jsonify(response.json())
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Failed to connect to {KOSOVO_PRICE_URL} for historical prices: {e}")
+
+        # Fallback: try localhost
+        try:
+            response = requests.get(
+                'http://localhost:5008/api/v1/prices/historical',
+                params=params,
+                timeout=10
+            )
+            if response.status_code == 200:
+                return jsonify(response.json())
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Failed to connect to localhost:5008 for historical prices: {e}")
+
+        return jsonify({
+            'status': 'error',
+            'error': 'Historical price service unavailable. Please ensure kosovo-energy-price-collector is running on port 5008.',
+            'service_down': True
+        }), 503
+    except Exception as e:
+        logger.error(f"Error fetching Kosovo historical prices: {e}")
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
 @app.route('/api/kosovo/consumption', methods=['GET'])
 def get_kosovo_consumption():
     """Merr konsumin e energjisë për Kosovën"""
@@ -455,6 +497,39 @@ def get_kosovo_consumption_historical():
                 return jsonify(response.json())
         except:
             pass
+        return jsonify({'error': 'Service unavailable', 'status': 'service_down'}), 503
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/kosovo/consumption/yearly', methods=['GET'])
+def get_kosovo_consumption_yearly():
+    """Merr konsumin vjetor historik për Kosovën (2010–sot)."""
+    try:
+        from_year = request.args.get('from_year', '2010')
+        to_year = request.args.get('to_year', str(datetime.utcnow().year))
+        params = {'from_year': from_year, 'to_year': to_year}
+
+        try:
+            response = requests.get(
+                f'{KOSOVO_CONSUMPTION_URL}/api/v1/consumption/historical-yearly',
+                params=params,
+                timeout=10
+            )
+            if response.status_code == 200:
+                return jsonify(response.json())
+        except requests.exceptions.RequestException:
+            try:
+                response = requests.get(
+                    'http://localhost:5009/api/v1/consumption/historical-yearly',
+                    params=params,
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    return jsonify(response.json())
+            except Exception:
+                pass
+
         return jsonify({'error': 'Service unavailable', 'status': 'service_down'}), 503
     except Exception as e:
         return jsonify({'error': str(e)}), 500

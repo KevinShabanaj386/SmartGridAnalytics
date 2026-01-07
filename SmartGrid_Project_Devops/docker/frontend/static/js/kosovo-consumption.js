@@ -32,6 +32,20 @@ async function loadHistoricalData() {
     }
 }
 
+async function loadYearlyHistory() {
+    try {
+        const response = await fetch('/api/kosovo/consumption/yearly?from_year=2010');
+        const data = await response.json();
+
+        if (data.status === 'success' && data.data && data.data.length > 0) {
+            updateHistoricalChart(data.data);
+            updateConsumptionTrendSummary(data.data);
+        }
+    } catch (error) {
+        console.error('Error loading yearly consumption history:', error);
+    }
+}
+
 function updateConsumptionChart(consumption) {
     const ctx = document.getElementById('consumptionChart');
     if (!ctx) return;
@@ -140,6 +154,46 @@ function updateHistoricalChart(historicalData) {
             }
         }
     });
+}
+
+function updateConsumptionTrendSummary(historyData) {
+    const summary = document.getElementById('consumptionTrendSummary');
+    if (!summary || !historyData || historyData.length === 0) return;
+
+    const sorted = [...historyData].sort((a, b) => {
+        const yearA = a.year || new Date(a.timestamp).getFullYear();
+        const yearB = b.year || new Date(b.timestamp).getFullYear();
+        return yearA - yearB;
+    });
+
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+
+    const firstVal = first.total_consumption_gwh || first.total_consumption_mw || 0;
+    const lastVal = last.total_consumption_gwh || last.total_consumption_mw || 0;
+
+    if (!firstVal || !lastVal) {
+        return;
+    }
+
+    const diffPct = ((lastVal - firstVal) / firstVal) * 100;
+    const importShareChange = (last.import_share_percent || 0) - (first.import_share_percent || 0);
+
+    const unit = first.total_consumption_gwh ? 'GWh' : 'MW';
+
+    summary.innerHTML = `
+        <p>
+            Që nga viti <strong>${first.year || new Date(first.timestamp).getFullYear()}</strong> deri në
+            <strong>${last.year || new Date(last.timestamp).getFullYear()}</strong>,
+            konsumi total është
+            <strong>${diffPct >= 0 ? 'rritur' : 'ulur'} me ${Math.abs(diffPct).toFixed(1)}%</strong> (${firstVal.toFixed(1)} → ${lastVal.toFixed(1)} ${unit}).
+        </p>
+        <p>
+            Pjesëmarrja e importit ka ndryshuar me
+            <strong>${importShareChange >= 0 ? '+' : ''}${importShareChange.toFixed(1)} pikë përqindje</strong>
+            gjatë kësaj periudhe.
+        </p>
+    `;
 }
 
 function updateRegionsDetails(consumption) {

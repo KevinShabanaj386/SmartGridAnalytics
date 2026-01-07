@@ -2,7 +2,7 @@
 Kosovo Energy Price Collector Service
 Simulates scraping electricity price data for Kosovo from multiple sources.
 """
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from datetime import datetime, timedelta
 import random
 import logging
@@ -86,6 +86,63 @@ def get_latest_prices():
         )
     except Exception as e:
         logger.error(f"Error generating price data: {e}")
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+def generate_price_history(from_year: int, to_year: int) -> list:
+    """Generate simulated yearly average prices and import share from 2010 onwards."""
+    if from_year > to_year:
+        from_year, to_year = to_year, from_year
+
+    years = list(range(from_year, to_year + 1))
+    history = []
+
+    # Anchor values so the series looks smooth and realistic
+    base_import_price = random.uniform(40, 60)  # €/MWh
+    base_domestic_price = base_import_price * random.uniform(0.8, 0.95)
+    base_import_share = random.uniform(25, 40)
+
+    for idx, year in enumerate(years):
+        # Gentle upward trend with a bit of noise
+        growth_factor = 1 + 0.02 * idx + random.uniform(-0.01, 0.03)
+        import_price = round(base_import_price * growth_factor, 2)
+        domestic_price = round(base_domestic_price * (1 + 0.015 * idx), 2)
+        import_share = round(min(80.0, base_import_share + idx * random.uniform(0.5, 1.5)), 1)
+
+        avg_price_eur_per_kwh = round(
+            (import_price / 1000.0) * (import_share / 100.0)
+            + (domestic_price / 1000.0) * (1 - import_share / 100.0),
+            4,
+        )
+
+        history.append(
+            {
+                "year": year,
+                "import_price_eur_per_mwh": import_price,
+                "domestic_price_eur_per_mwh": domestic_price,
+                "import_share_percent": import_share,
+                "average_price_eur_per_kwh": avg_price_eur_per_kwh,
+                "timestamp": datetime(year, 1, 1).isoformat(),
+            }
+        )
+
+    return history
+
+
+@app.route("/api/v1/prices/historical", methods=["GET"])
+def get_price_history():
+    """Return simulated long-term price and import trends (2010–today)."""
+    try:
+        now_year = datetime.utcnow().year
+        from_year = int(request.args.get("from_year", 2010))
+        to_year = int(request.args.get("to_year", now_year))
+        from_year = max(2010, from_year)
+        to_year = min(now_year, to_year)
+
+        history = generate_price_history(from_year, to_year)
+        return jsonify({"status": "success", "data": history}), 200
+    except Exception as e:
+        logger.error(f"Error generating price history: {e}")
         return jsonify({"status": "error", "error": str(e)}), 500
 
 

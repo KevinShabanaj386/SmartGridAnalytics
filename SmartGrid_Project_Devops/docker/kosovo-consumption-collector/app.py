@@ -64,6 +64,35 @@ def generate_historical_consumption(hours: int) -> list:
     return data
 
 
+def generate_yearly_consumption(from_year: int, to_year: int) -> list:
+    """Generate simulated yearly consumption and import share since 2010."""
+    if from_year > to_year:
+        from_year, to_year = to_year, from_year
+
+    years = list(range(from_year, to_year + 1))
+    data = []
+
+    base_consumption = random.uniform(4500, 5500)  # GWh
+    base_import_share = random.uniform(20, 35)
+
+    for idx, year in enumerate(years):
+        # Gentle long-term growth with some noise
+        trend = 1 + 0.01 * idx + random.uniform(-0.01, 0.02)
+        yearly_total_gwh = round(base_consumption * trend, 1)
+        import_share = round(min(75.0, base_import_share + idx * random.uniform(0.3, 1.0)), 1)
+
+        data.append(
+            {
+                "year": year,
+                "total_consumption_gwh": yearly_total_gwh,
+                "import_share_percent": import_share,
+                "timestamp": datetime(year, 1, 1).isoformat(),
+            }
+        )
+
+    return data
+
+
 @app.route("/health", methods=["GET"])
 def health_check():
     return jsonify(
@@ -95,6 +124,23 @@ def get_historical_consumption():
         return jsonify({"status": "success", "data": series}), 200
     except Exception as e:
         logger.error(f"Error generating historical consumption: {e}")
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/api/v1/consumption/historical-yearly", methods=["GET"])
+def get_historical_consumption_yearly():
+    """Return simulated yearly consumption and import share from 2010 onwards."""
+    try:
+        now_year = datetime.utcnow().year
+        from_year = int(request.args.get("from_year", 2010))
+        to_year = int(request.args.get("to_year", now_year))
+        from_year = max(2010, from_year)
+        to_year = min(now_year, to_year)
+
+        series = generate_yearly_consumption(from_year, to_year)
+        return jsonify({"status": "success", "data": series}), 200
+    except Exception as e:
+        logger.error(f"Error generating yearly consumption: {e}")
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
