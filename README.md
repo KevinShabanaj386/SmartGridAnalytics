@@ -88,6 +88,7 @@ docker-compose up -d
 - **MLflow**: http://localhost:5005 (ML models)
 - **Jaeger**: http://localhost:16686 (Tracing)
 - **API Gateway**: http://localhost:5000 (API endpoints)
+- **Trino**: http://localhost:8080 (Federated Query Engine)
 
 Për lista të plotë të portave, shikoni [PORTS.md](SmartGrid_Project_Devops/PORTS.md)
 
@@ -424,6 +425,96 @@ helm install smartgrid ./kubernetes/helm/smartgrid \
 - MongoDB përdoret për metadata dhe audit logs
 - Fallback në PostgreSQL nëse MongoDB dështon
 
+### ✅ Data Lakehouse (Delta Lake) - IMPLEMENTUAR 100%
+
+**Çfarë është shtuar:**
+- Delta Lake storage për Data Lakehouse (kërkesë e profesorit)
+- ACID transactions në data lake
+- Schema evolution support
+- Time travel queries për version history
+- Integration me Spark për analytics
+- Partitioning për performancë
+
+**Vendndodhja:**
+- `docker/data-processing-service/delta_lake_storage.py` - Delta Lake client
+- `docker/data-processing-service/app.py` - Integration në data processing
+- `kubernetes/infrastructure/delta-lake-pvc.yaml` - Kubernetes PVC
+- `docker/docker-compose.yml` - Delta Lake volume
+
+**Features:**
+- ✅ ACID transactions për data integrity
+- ✅ Schema evolution pa breaking changes
+- ✅ Time travel queries për audit dhe debugging
+- ✅ Partitioning për performance optimization
+- ✅ Integration me Spark Structured Streaming
+
+**Përdorimi:**
+```python
+from delta_lake_storage import store_sensor_data_delta, time_travel_query
+
+# Shkruan në Delta Lake
+store_sensor_data_delta(sensor_data)
+
+# Time travel query - lexon version të vjetër
+df = time_travel_query(spark, DELTA_LAKE_SENSOR_PATH, version=5)
+```
+
+**Dokumentim:**
+- `DATA_LAKEHOUSE_TRINO_IMPLEMENTATION.md` - Implementation details
+- `TESTING_DELTA_LAKE_TRINO.md` - Testing guide
+
+### ✅ Federated Query Engine (Trino) - IMPLEMENTUAR 100%
+
+**Çfarë është shtuar:**
+- Trino federated query engine (kërkesë e profesorit - Presto/Trino)
+- SQL queries mbi PostgreSQL, MongoDB, Cassandra, dhe Kafka
+- Cross-platform joins
+- Unified query interface
+- Catalog management
+
+**Vendndodhja:**
+- `docker/trino/` - Trino server configuration
+- `docker/analytics-service/trino_client.py` - Trino Python client
+- `docker/analytics-service/app.py` - 5 Trino API endpoints
+- `kubernetes/infrastructure/trino-statefulset.yaml` - Kubernetes StatefulSet
+- `docker/docker-compose.yml` - Trino service
+
+**API Endpoints:**
+- `POST /api/v1/analytics/federated/query` - Ekzekuton federated SQL query
+- `GET /api/v1/analytics/federated/catalogs` - Merr lista e catalogs
+- `GET /api/v1/analytics/federated/schemas/<catalog>` - Merr lista e schemas
+- `GET /api/v1/analytics/federated/tables/<catalog>/<schema>` - Merr lista e tables
+- `POST /api/v1/analytics/federated/cross-platform-join` - Cross-platform joins
+
+**Features:**
+- ✅ SQL queries mbi PostgreSQL, MongoDB, Cassandra, Kafka
+- ✅ Cross-platform joins (e.g., PostgreSQL JOIN MongoDB)
+- ✅ Unified query interface
+- ✅ Catalog management
+- ✅ High performance federated queries
+
+**Përdorimi:**
+```python
+from trino_client import execute_federated_query, cross_platform_join
+
+# Federated query
+results = execute_federated_query(
+    "SELECT * FROM postgresql.public.sensor_data LIMIT 100"
+)
+
+# Cross-platform join
+results = cross_platform_join("""
+    SELECT s.sensor_id, s.value, m.customer_id
+    FROM postgresql.public.sensor_data s
+    JOIN mongodb.smartgrid_audit.audit_logs m
+    ON s.sensor_id = m.sensor_id
+""")
+```
+
+**Dokumentim:**
+- `DATA_LAKEHOUSE_TRINO_IMPLEMENTATION.md` - Implementation details
+- `TESTING_DELTA_LAKE_TRINO.md` - Testing guide
+
 ### ✅ Dokumentim UML/ERD - IMPLEMENTUAR
 
 **Çfarë është shtuar:**
@@ -471,12 +562,27 @@ helm install smartgrid ./kubernetes/helm/smartgrid \
 - `MONGODB_PASSWORD=smartgrid123` - MongoDB password
 - `USE_MONGODB_AUDIT=true` - Aktivizo/deaktivizo MongoDB audit logs
 
+**Për Delta Lake:**
+- `DELTA_LAKE_BASE_PATH=/data/delta-lake` - Base path për Delta Lake storage
+- `DELTA_LAKE_SENSOR_PATH=/data/delta-lake/sensor_data` - Path për sensor data
+- `DELTA_LAKE_METER_PATH=/data/delta-lake/meter_readings` - Path për meter readings
+- `DELTA_LAKE_WEATHER_PATH=/data/delta-lake/weather_data` - Path për weather data
+
+**Për Trino:**
+- `TRINO_HOST=smartgrid-trino` - Trino server host
+- `TRINO_PORT=8080` - Trino server port
+- `TRINO_USER=smartgrid` - Trino user
+- `TRINO_PASSWORD=smartgrid123` - Trino password
+
 ## 📦 Dependencies e Reja
 
 - `consul==1.1.0` - Consul client library (në API Gateway dhe Data Ingestion Service)
 - `confluent-kafka[avro]==2.3.0` - Avro support për Kafka (në Data Ingestion Service)
 - `pymemcache==4.0.0` - Memcached client (në Analytics Service)
 - `pymongo==4.6.0` - MongoDB client (në User Management Service)
+- `delta-spark==3.0.0` - Delta Lake support për Spark (në Data Processing Service)
+- `pyspark==3.5.0` - Apache Spark për Delta Lake (në Data Processing Service)
+- `trino==0.328.0` - Trino federated query engine client (në Analytics Service)
 
 ## Kontribut
 
