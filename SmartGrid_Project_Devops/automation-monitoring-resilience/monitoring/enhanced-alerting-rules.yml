@@ -1,0 +1,163 @@
+# Enhanced Prometheus Alerting Rules për Smart Grid Analytics
+# Production-ready alerting configuration
+
+groups:
+  - name: smartgrid_critical_alerts
+    interval: 30s
+    rules:
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "High error rate detected in {{ $labels.service }}"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+          runbook_url: "https://smartgrid.local/runbooks/high-error-rate"
+          
+      # Service Down
+      - alert: ServiceDown
+        expr: up{job=~"smartgrid-.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service has been down for more than 2 minutes"
+          runbook_url: "https://smartgrid.local/runbooks/service-down"
+          
+      # High Response Time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High response time in {{ $labels.service }}"
+          description: "95th percentile response time is {{ $value }}s (threshold: 1s)"
+          runbook_url: "https://smartgrid.local/runbooks/high-response-time"
+          
+      # Database Connection Pool Exhausted
+      - alert: DatabaseConnectionPoolExhausted
+        expr: postgres_pool_active_connections / postgres_pool_max_connections > 0.9
+        for: 5m
+        labels:
+          severity: critical
+          team: database
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "{{ $value | humanizePercentage }} of connections in use"
+          runbook_url: "https://smartgrid.local/runbooks/database-connection-pool"
+          
+      # Kafka Consumer Lag
+      - alert: KafkaConsumerLag
+        expr: kafka_consumer_lag_sum > 10000
+        for: 5m
+        labels:
+          severity: warning
+          team: data-platform
+        annotations:
+          summary: "High Kafka consumer lag detected"
+          description: "Consumer lag is {{ $value }} messages"
+          runbook_url: "https://smartgrid.local/runbooks/kafka-consumer-lag"
+          
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High memory usage in {{ $labels.container_name }}"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+          runbook_url: "https://smartgrid.local/runbooks/high-memory-usage"
+          
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total[5m]) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High CPU usage in {{ $labels.container_name }}"
+          description: "CPU usage is {{ $value | humanizePercentage }}"
+          runbook_url: "https://smartgrid.local/runbooks/high-cpu-usage"
+          
+      # Disk Space Low
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Only {{ $value | humanizePercentage }} disk space available"
+          runbook_url: "https://smartgrid.local/runbooks/disk-space-low"
+          
+      # Certificate Expiring Soon
+      - alert: CertificateExpiringSoon
+        expr: (ssl_cert_not_after - time()) / 86400 < 30
+        for: 1h
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "Certificate expires in {{ $value }} days"
+          runbook_url: "https://smartgrid.local/runbooks/certificate-renewal"
+          
+      # Failed Health Checks
+      - alert: FailedHealthChecks
+        expr: up{job="health-check"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Health checks failing for {{ $labels.service }}"
+          description: "Service health check has been failing for 3 minutes"
+          runbook_url: "https://smartgrid.local/runbooks/failed-health-checks"
+
+  - name: smartgrid_business_alerts
+    interval: 1m
+    rules:
+      # Data Ingestion Rate Dropped
+      - alert: DataIngestionRateDropped
+        expr: rate(sensor_data_ingested_total[5m]) < 100
+        for: 10m
+        labels:
+          severity: warning
+          team: data-platform
+        annotations:
+          summary: "Data ingestion rate dropped significantly"
+          description: "Ingestion rate is {{ $value }} events/sec (expected: >100)"
+          
+      # Anomaly Detection Rate High
+      - alert: HighAnomalyDetectionRate
+        expr: rate(anomalies_detected_total[5m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+          team: analytics
+        annotations:
+          summary: "High anomaly detection rate"
+          description: "{{ $value }} anomalies detected per second"
+          
+      # ML Model Prediction Error
+      - alert: MLModelPredictionError
+        expr: rate(ml_model_prediction_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: ml-platform
+        annotations:
+          summary: "ML model prediction errors detected"
+          description: "Error rate: {{ $value | humanizePercentage }}"
+

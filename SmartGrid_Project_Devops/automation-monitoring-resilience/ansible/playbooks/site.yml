@@ -1,0 +1,142 @@
+---
+# Ansible Playbook për Smart Grid Analytics
+# Configuration Management dhe Operational Automation
+
+- name: Configure Smart Grid Analytics Infrastructure
+  hosts: all
+  become: yes
+  vars:
+    app_user: smartgrid
+    app_group: smartgrid
+    app_dir: /opt/smartgrid
+    docker_compose_version: "2.24.0"
+    
+  tasks:
+    - name: Update system packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+      
+    - name: Update system packages (RedHat)
+      yum:
+        name: "*"
+        state: latest
+      when: ansible_os_family == "RedHat"
+
+    - name: Install required packages
+      package:
+        name:
+          - curl
+          - wget
+          - git
+          - python3
+          - python3-pip
+          - docker.io
+          - docker-compose
+          - htop
+          - net-tools
+        state: present
+
+    - name: Create application user
+      user:
+        name: "{{ app_user }}"
+        group: "{{ app_group }}"
+        shell: /bin/bash
+        home: "/home/{{ app_user }}"
+        create_home: yes
+
+    - name: Create application directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0755'
+
+    - name: Add user to docker group
+      user:
+        name: "{{ app_user }}"
+        groups: docker
+        append: yes
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        enabled: yes
+        state: started
+
+    - name: Configure Docker daemon
+      copy:
+        content: |
+          {
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "10m",
+              "max-file": "3"
+            },
+            "storage-driver": "overlay2"
+          }
+        dest: /etc/docker/daemon.json
+      notify: restart docker
+
+    - name: Configure firewall (UFW)
+      ufw:
+        rule: "{{ item.rule }}"
+        port: "{{ item.port }}"
+        proto: "{{ item.proto }}"
+        state: enabled
+      loop:
+        - { rule: allow, port: '22', proto: tcp }      # SSH
+        - { rule: allow, port: '80', proto: tcp }      # HTTP
+        - { rule: allow, port: '443', proto: tcp }     # HTTPS
+        - { rule: allow, port: '5000', proto: tcp }     # API Gateway
+        - { rule: allow, port: '8080', proto: tcp }     # Frontend
+        - { rule: allow, port: '3000', proto: tcp }     # Grafana
+        - { rule: allow, port: '9090', proto: tcp }     # Prometheus
+      when: ansible_os_family == "Debian"
+
+    - name: Configure firewall (firewalld)
+      firewalld:
+        port: "{{ item.port }}/{{ item.proto }}"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      loop:
+        - { port: '22', proto: 'tcp' }
+        - { port: '80', proto: 'tcp' }
+        - { port: '443', proto: 'tcp' }
+        - { port: '5000', proto: 'tcp' }
+        - { port: '8080', proto: 'tcp' }
+        - { port: '3000', proto: 'tcp' }
+        - { port: '9090', proto: 'tcp' }
+      when: ansible_os_family == "RedHat"
+
+    - name: Configure log rotation
+      copy:
+        content: |
+          /var/log/smartgrid/*.log {
+            daily
+            rotate 7
+            compress
+            delaycompress
+            missingok
+            notifempty
+            create 0644 {{ app_user }} {{ app_group }}
+          }
+        dest: /etc/logrotate.d/smartgrid
+
+    - name: Set up monitoring cron job
+      cron:
+        name: "System health check"
+        minute: "*/5"
+        job: "/opt/smartgrid/scripts/health-check.sh"
+        user: "{{ app_user }}"
+
+  handlers:
+    - name: restart docker
+      systemd:
+        name: docker
+        state: restarted
+

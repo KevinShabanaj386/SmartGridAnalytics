@@ -1,0 +1,88 @@
+---
+# Ansible Playbook për Deployment të Smart Grid Analytics
+# Automated deployment dhe configuration
+
+- name: Deploy Smart Grid Analytics
+  hosts: app_servers
+  become: yes
+  vars:
+    app_dir: /opt/smartgrid
+    docker_compose_file: docker-compose.yml
+    git_repo: https://github.com/KevinShabanaj386/SmartGridAnalytics.git
+    git_branch: main
+    
+  tasks:
+    - name: Check if application directory exists
+      stat:
+        path: "{{ app_dir }}"
+      register: app_dir_stat
+
+    - name: Clone repository (if not exists)
+      git:
+        repo: "{{ git_repo }}"
+        dest: "{{ app_dir }}"
+        version: "{{ git_branch }}"
+        update: yes
+      when: not app_dir_stat.stat.exists
+
+    - name: Pull latest changes
+      git:
+        repo: "{{ git_repo }}"
+        dest: "{{ app_dir }}"
+        version: "{{ git_branch }}"
+        update: yes
+      when: app_dir_stat.stat.exists
+
+    - name: Create environment file
+      template:
+        src: env.j2
+        dest: "{{ app_dir }}/SmartGrid_Project_Devops/docker/.env"
+      vars:
+        postgres_password: "{{ vault_postgres_password }}"
+        jwt_secret: "{{ vault_jwt_secret }}"
+        kafka_broker: "{{ kafka_broker | default('smartgrid-kafka:9092') }}"
+
+    - name: Stop existing containers
+      docker_compose:
+        project_src: "{{ app_dir }}/SmartGrid_Project_Devops/docker"
+        state: stopped
+      ignore_errors: yes
+
+    - name: Pull latest Docker images
+      docker_compose:
+        project_src: "{{ app_dir }}/SmartGrid_Project_Devops/docker"
+        pull: yes
+
+    - name: Start services
+      docker_compose:
+        project_src: "{{ app_dir }}/SmartGrid_Project_Devops/docker"
+        state: started
+        build: yes
+
+    - name: Wait for services to be healthy
+      uri:
+        url: "{{ item.url }}/health"
+        method: GET
+        status_code: 200
+        timeout: 30
+      loop:
+        - { url: "http://localhost:5000" }  # API Gateway
+        - { url: "http://localhost:5001" }  # Data Ingestion
+        - { url: "http://localhost:5002" }  # Analytics
+      retries: 10
+      delay: 5
+      register: health_checks
+      until: health_checks is succeeded
+      ignore_errors: yes
+
+    - name: Run smoke tests
+      shell: |
+        cd {{ app_dir }}/SmartGrid_Project_Devops/docker
+        ./scripts/smoke-tests.sh
+      register: smoke_test_result
+      failed_when: smoke_test_result.rc != 0
+
+    - name: Notify deployment status
+      debug:
+        msg: "Deployment completed successfully"
+

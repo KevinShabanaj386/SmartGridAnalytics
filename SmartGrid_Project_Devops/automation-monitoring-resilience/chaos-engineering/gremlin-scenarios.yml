@@ -1,0 +1,88 @@
+# Gremlin Chaos Engineering Scenarios për Smart Grid Analytics
+# Enterprise-grade chaos experiments
+
+scenarios:
+  - name: "Database Connection Failure"
+    description: "Simulate database connection failures"
+    target_type: "container"
+    target_filters:
+      - field: "name"
+        value: "smartgrid-postgres"
+    attacks:
+      - type: "blackhole"
+        args:
+          port: 5432
+          protocol: "tcp"
+          duration_seconds: 60
+    expected_behavior:
+      - "Services should retry connections"
+      - "Circuit breakers should activate"
+      - "Fallback mechanisms should engage"
+      
+  - name: "Kafka Broker Latency"
+    description: "Add latency to Kafka broker communication"
+    target_type: "container"
+    target_filters:
+      - field: "name"
+        value: "smartgrid-kafka"
+    attacks:
+      - type: "latency"
+        args:
+          delay: 1000  # 1 second
+          duration_seconds: 120
+          port: 9092
+    expected_behavior:
+      - "Message processing should continue"
+      - "Consumer lag should be monitored"
+      - "Alerts should trigger if lag exceeds threshold"
+      
+  - name: "API Gateway CPU Exhaustion"
+    description: "Stress API Gateway CPU"
+    target_type: "container"
+    target_filters:
+      - field: "name"
+        value: "smartgrid-api-gateway"
+    attacks:
+      - type: "cpu"
+        args:
+          cpu_percent: 90
+          duration_seconds: 180
+    expected_behavior:
+      - "Load balancer should route traffic to healthy instances"
+      - "Auto-scaling should trigger"
+      - "Response times should degrade gracefully"
+      
+  - name: "Network Partition"
+    description: "Simulate network partition between services"
+    target_type: "container"
+    target_filters:
+      - field: "name"
+        value: "smartgrid-data-processing"
+    attacks:
+      - type: "blackhole"
+        args:
+          port: "all"
+          protocol: "tcp"
+          duration_seconds: 300
+    expected_behavior:
+      - "Services should detect partition"
+      - "Circuit breakers should open"
+      - "Health checks should fail"
+      - "Alerts should trigger"
+      
+  - name: "Memory Leak Simulation"
+    description: "Simulate memory pressure"
+    target_type: "container"
+    target_filters:
+      - field: "name"
+        value: "smartgrid-analytics-service"
+    attacks:
+      - type: "memory"
+        args:
+          memory_percent: 95
+          duration_seconds: 240
+    expected_behavior:
+      - "OOM killer should not terminate critical processes"
+      - "Memory alerts should trigger"
+      - "Auto-restart should occur if configured"
+

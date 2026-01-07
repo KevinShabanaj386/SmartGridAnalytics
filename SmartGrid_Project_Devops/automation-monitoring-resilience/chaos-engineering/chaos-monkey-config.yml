@@ -1,0 +1,63 @@
+# Chaos Monkey Configuration për Smart Grid Analytics
+# Simulon failures për të testuar resilience
+
+chaos_monkey:
+  enabled: true
+  schedule: "0 2 * * *"  # Run at 2 AM daily
+  timezone: "UTC"
+  
+  # Services to target
+  services:
+    - name: smartgrid-data-processing
+      probability: 0.1  # 10% chance of termination
+      min_time_between_attacks: 3600  # 1 hour
+      
+    - name: smartgrid-analytics-service
+      probability: 0.05  # 5% chance
+      min_time_between_attacks: 7200  # 2 hours
+      
+    - name: smartgrid-api-gateway
+      probability: 0.02  # 2% chance (critical service)
+      min_time_between_attacks: 14400  # 4 hours
+
+  # Attack types
+  attacks:
+    - type: "pod_termination"
+      description: "Terminate random pods"
+      enabled: true
+      
+    - type: "network_latency"
+      description: "Add network latency"
+      enabled: true
+      latency_ms: 500
+      duration_seconds: 60
+      
+    - type: "cpu_stress"
+      description: "Stress CPU resources"
+      enabled: true
+      cpu_percent: 90
+      duration_seconds: 120
+      
+    - type: "memory_pressure"
+      description: "Create memory pressure"
+      enabled: true
+      memory_percent: 85
+      duration_seconds: 120
+
+  # Exclusions (services to never attack)
+  exclusions:
+    - smartgrid-postgres
+    - smartgrid-kafka
+    - smartgrid-vault
+    - smartgrid-consul
+
+  # Notifications
+  notifications:
+    enabled: true
+    channels:
+      - type: "slack"
+        webhook_url: "${SLACK_WEBHOOK_URL}"
+      - type: "email"
+        recipients:
+          - "devops@smartgrid.local"
+

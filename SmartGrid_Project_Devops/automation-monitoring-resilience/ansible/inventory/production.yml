@@ -1,0 +1,40 @@
+---
+# Ansible Inventory për Production Environment
+
+all:
+  children:
+    app_servers:
+      hosts:
+        smartgrid-prod-01:
+          ansible_host: 10.0.1.10
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ~/.ssh/smartgrid-prod.pem
+        smartgrid-prod-02:
+          ansible_host: 10.0.1.11
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ~/.ssh/smartgrid-prod.pem
+      vars:
+        environment: production
+        kafka_broker: smartgrid-kafka-prod:9092
+        postgres_host: smartgrid-postgres-prod
+        
+    monitoring_servers:
+      hosts:
+        monitoring-prod-01:
+          ansible_host: 10.0.1.20
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ~/.ssh/smartgrid-prod.pem
+      vars:
+        prometheus_port: 9090
+        grafana_port: 3000
+        
+    database_servers:
+      hosts:
+        db-prod-01:
+          ansible_host: 10.0.1.30
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ~/.ssh/smartgrid-prod.pem
+      vars:
+        postgres_version: "15"
+        postgres_port: 5432
+
