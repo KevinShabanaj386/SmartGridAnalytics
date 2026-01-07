@@ -1,0 +1,39 @@
+{
+  "type": "record",
+  "name": "MeterReading",
+  "namespace": "com.smartgrid.analytics",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string",
+      "doc": "Unique identifier for the meter reading event"
+    },
+    {
+      "name": "meter_id",
+      "type": "string",
+      "doc": "Identifier of the smart meter"
+    },
+    {
+      "name": "customer_id",
+      "type": "string",
+      "doc": "Identifier of the customer"
+    },
+    {
+      "name": "reading",
+      "type": "double",
+      "doc": "Energy consumption reading in kWh"
+    },
+    {
+      "name": "unit",
+      "type": "string",
+      "default": "kWh",
+      "doc": "Unit of measurement"
+    },
+    {
+      "name": "timestamp",
+      "type": "string",
+      "doc": "ISO 8601 timestamp of the reading"
+    }
+  ]
+}
+
