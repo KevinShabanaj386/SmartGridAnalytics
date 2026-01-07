@@ -118,15 +118,23 @@ def get_db_connection():
             pass  # Index mund të ekzistojë tashmë
     return conn
 
-def get_energy_price_eur_per_kwh(tariff_type: str = 'residential') -> float:
+def get_energy_price_eur_per_kwh(tariff_type: str = 'residential', consider_peak_hours: bool = True) -> dict:
     """
     Merr çmimin e energjisë në Euro për kWh nga price collector service
-    Returns default price nëse service nuk është i disponueshëm
+    Returns dict me price, is_peak, validity period, etj.
+    consider_peak_hours: Nëse True, aplikon peak hour multiplier
     """
     try:
         import requests
+        from datetime import datetime
+        
         # Default price për Kosovën (nëse service nuk është i disponueshëm)
         DEFAULT_PRICE_EUR_PER_KWH = 0.085  # ~0.085 €/kWh për Kosovën (mesatare)
+        PEAK_HOUR_MULTIPLIER = 1.15  # 15% më i lartë gjatë peak hours
+        PEAK_HOURS = [8, 9, 10, 18, 19, 20]  # 8-10 AM dhe 6-8 PM
+        
+        current_hour = datetime.now().hour
+        is_peak = consider_peak_hours and current_hour in PEAK_HOURS
         
         # Try to get price from Kosovo price collector
         price_urls = [
@@ -134,6 +142,10 @@ def get_energy_price_eur_per_kwh(tariff_type: str = 'residential') -> float:
             'http://localhost:5008',
             'http://127.0.0.1:5008'
         ]
+        
+        base_price = None
+        price_source = 'default'
+        price_timestamp = None
         
         for url in price_urls:
             try:
@@ -144,33 +156,84 @@ def get_energy_price_eur_per_kwh(tariff_type: str = 'residential') -> float:
                         # Extract price nga data
                         prices_data = data['data']
                         if isinstance(prices_data, list) and len(prices_data) > 0:
-                            for price_source in prices_data:
-                                if 'prices' in price_source:
-                                    prices = price_source['prices']
+                            for price_source_data in prices_data:
+                                if 'prices' in price_source_data:
+                                    prices = price_source_data['prices']
                                     # Try tariff_type first, then default
                                     if tariff_type in prices:
                                         price_info = prices[tariff_type]
                                         if 'price_eur_per_kwh' in price_info:
-                                            return float(price_info['price_eur_per_kwh'])
+                                            base_price = float(price_info['price_eur_per_kwh'])
+                                            price_source = price_source_data.get('source', 'unknown')
+                                            price_timestamp = price_source_data.get('scraped_at', datetime.now().isoformat())
+                                            break
                                     elif 'default' in prices:
                                         price_info = prices['default']
                                         if 'price_eur_per_kwh' in price_info:
-                                            return float(price_info['price_eur_per_kwh'])
+                                            base_price = float(price_info['price_eur_per_kwh'])
+                                            price_source = price_source_data.get('source', 'unknown')
+                                            price_timestamp = price_source_data.get('scraped_at', datetime.now().isoformat())
+                                            break
                                     elif 'residential' in prices:
                                         price_info = prices['residential']
                                         if 'price_eur_per_kwh' in price_info:
-                                            return float(price_info['price_eur_per_kwh'])
+                                            base_price = float(price_info['price_eur_per_kwh'])
+                                            price_source = price_source_data.get('source', 'unknown')
+                                            price_timestamp = price_source_data.get('scraped_at', datetime.now().isoformat())
+                                            break
             except (requests.exceptions.RequestException, KeyError, ValueError) as e:
                 logger.debug(f"Could not get price from {url}: {e}")
                 continue
         
-        # Return default price nëse nuk mund të merret
-        logger.info(f"Using default energy price: {DEFAULT_PRICE_EUR_PER_KWH} €/kWh")
-        return DEFAULT_PRICE_EUR_PER_KWH
+        # Use default price nëse nuk mund të merret
+        if base_price is None:
+            base_price = DEFAULT_PRICE_EUR_PER_KWH
+            price_source = 'default'
+            price_timestamp = datetime.now().isoformat()
+            logger.info(f"Using default energy price: {DEFAULT_PRICE_EUR_PER_KWH} €/kWh")
+        
+        # Apply peak hour multiplier nëse është peak hour
+        final_price = base_price
+        if is_peak:
+            final_price = base_price * PEAK_HOUR_MULTIPLIER
+        
+        # Calculate validity period (prices typically valid for 24 hours)
+        validity_until = None
+        if price_timestamp:
+            try:
+                from datetime import timedelta
+                price_dt = datetime.fromisoformat(price_timestamp.replace('Z', '+00:00'))
+                validity_until = (price_dt + timedelta(hours=24)).isoformat()
+            except:
+                validity_until = (datetime.now() + timedelta(hours=24)).isoformat()
+        
+        return {
+            'price_eur_per_kwh': round(final_price, 4),
+            'base_price_eur_per_kwh': round(base_price, 4),
+            'is_peak_hour': is_peak,
+            'peak_multiplier': PEAK_HOUR_MULTIPLIER if is_peak else 1.0,
+            'current_hour': current_hour,
+            'tariff_type': tariff_type,
+            'price_source': price_source,
+            'price_timestamp': price_timestamp,
+            'validity_until': validity_until,
+            'currency': 'EUR'
+        }
         
     except Exception as e:
         logger.warning(f"Error getting energy price: {e}, using default")
-        return 0.085  # Default price për Kosovën
+        return {
+            'price_eur_per_kwh': 0.085,
+            'base_price_eur_per_kwh': 0.085,
+            'is_peak_hour': False,
+            'peak_multiplier': 1.0,
+            'current_hour': datetime.now().hour,
+            'tariff_type': tariff_type,
+            'price_source': 'default',
+            'price_timestamp': datetime.now().isoformat(),
+            'validity_until': (datetime.now() + timedelta(hours=24)).isoformat(),
+            'currency': 'EUR'
+        }
 
 def calculate_cost_eur(consumption_kwh: float, price_eur_per_kwh: float = None) -> float:
     """
@@ -179,7 +242,8 @@ def calculate_cost_eur(consumption_kwh: float, price_eur_per_kwh: float = None) 
     price_eur_per_kwh: Çmimi për kWh (nëse None, merr nga price service)
     """
     if price_eur_per_kwh is None:
-        price_eur_per_kwh = get_energy_price_eur_per_kwh()
+        price_info = get_energy_price_eur_per_kwh()
+        price_eur_per_kwh = price_info['price_eur_per_kwh']
     
     # Nëse consumption është në MW, konverto në kWh
     # (Supozojmë që nëse > 1000, është në MW, përndryshe kWh)
@@ -987,7 +1051,8 @@ def get_consumption_trends():
         from decimal import Decimal
         
         # Merr çmimin e energjisë për llogaritjen e kostos
-        price_eur_per_kwh = get_energy_price_eur_per_kwh()
+        price_info = get_energy_price_eur_per_kwh()
+        price_eur_per_kwh = price_info['price_eur_per_kwh']
         
         for row in results:
             # Konverto decimal në float
@@ -1063,7 +1128,8 @@ def get_monthly_trends():
         from decimal import Decimal
         
         # Merr çmimin e energjisë për llogaritjen e kostos
-        price_eur_per_kwh = get_energy_price_eur_per_kwh()
+        price_info = get_energy_price_eur_per_kwh()
+        price_eur_per_kwh = price_info['price_eur_per_kwh']
         
         for row in results:
             total_consumption = float(row['total_consumption']) if isinstance(row['total_consumption'], (Decimal, int, float)) else 0.0
@@ -1139,7 +1205,8 @@ def get_seasonal_trends():
         from decimal import Decimal
         
         # Merr çmimin e energjisë për llogaritjen e kostos
-        price_eur_per_kwh = get_energy_price_eur_per_kwh()
+        price_info = get_energy_price_eur_per_kwh()
+        price_eur_per_kwh = price_info['price_eur_per_kwh']
         
         for row in results:
             total_consumption = float(row['total_consumption']) if isinstance(row['total_consumption'], (Decimal, int, float)) else 0.0
@@ -1389,6 +1456,137 @@ def get_growth_analysis():
         
     except Exception as e:
         logger.error(f"Error getting growth analysis: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/budget-calculator', methods=['GET'])
+@cache_result(ttl=60)  # Cache për 1 minutë (real-time price updates)
+def budget_calculator():
+    """
+    Real-time Energy Budget Calculator
+    Llogarit sa kWh mund të konsumohen për një shumë në Euro, ose anasjelltas
+    
+    Query params:
+    - amount_eur: Shuma në Euro (për llogaritjen € → kWh)
+    - amount_kwh: Shuma në kWh (për llogaritjen kWh → €)
+    - tariff_type: residential, commercial, industrial (default: residential)
+    - include_peak_hours: true/false (default: true) - përfshi peak hour pricing
+    
+    Returns:
+    - Forward calculation (€ → kWh): amount_eur, calculated_kwh, price_info
+    - Reverse calculation (kWh → €): amount_kwh, calculated_eur, price_info
+    """
+    try:
+        from datetime import datetime, timedelta
+        
+        amount_eur = request.args.get('amount_eur')
+        amount_kwh = request.args.get('amount_kwh')
+        tariff_type = request.args.get('tariff_type', 'residential')
+        include_peak_hours = request.args.get('include_peak_hours', 'true').lower() == 'true'
+        
+        # Validate input
+        if not amount_eur and not amount_kwh:
+            return jsonify({
+                'error': 'Either amount_eur or amount_kwh must be provided',
+                'example_forward': '/api/v1/analytics/budget-calculator?amount_eur=10',
+                'example_reverse': '/api/v1/analytics/budget-calculator?amount_kwh=100'
+            }), 400
+        
+        if amount_eur and amount_kwh:
+            return jsonify({
+                'error': 'Provide either amount_eur OR amount_kwh, not both'
+            }), 400
+        
+        # Get current price with peak hour consideration
+        price_info = get_energy_price_eur_per_kwh(tariff_type, consider_peak_hours=include_peak_hours)
+        current_price = price_info['price_eur_per_kwh']
+        
+        result = {
+            'status': 'success',
+            'calculation_type': 'forward' if amount_eur else 'reverse',
+            'price_info': price_info,
+            'calculated_at': datetime.now().isoformat(),
+            'disclaimer': 'Prices may change over time. This calculation is valid for the current moment only.'
+        }
+        
+        # Forward calculation: € → kWh
+        if amount_eur:
+            try:
+                amount_eur_float = float(amount_eur)
+                if amount_eur_float < 0:
+                    return jsonify({'error': 'Amount must be positive'}), 400
+                
+                calculated_kwh = amount_eur_float / current_price
+                
+                result.update({
+                    'input': {
+                        'amount_eur': round(amount_eur_float, 2),
+                        'currency': 'EUR'
+                    },
+                    'output': {
+                        'kwh': round(calculated_kwh, 2),
+                        'mwh': round(calculated_kwh / 1000, 4) if calculated_kwh >= 1000 else None
+                    },
+                    'calculation': {
+                        'formula': f'{amount_eur_float} € ÷ {current_price} €/kWh = {calculated_kwh:.2f} kWh',
+                        'price_per_kwh': current_price
+                    }
+                })
+                
+            except ValueError:
+                return jsonify({'error': 'Invalid amount_eur value. Must be a number.'}), 400
+        
+        # Reverse calculation: kWh → €
+        elif amount_kwh:
+            try:
+                amount_kwh_float = float(amount_kwh)
+                if amount_kwh_float < 0:
+                    return jsonify({'error': 'Amount must be positive'}), 400
+                
+                calculated_eur = amount_kwh_float * current_price
+                
+                result.update({
+                    'input': {
+                        'kwh': round(amount_kwh_float, 2),
+                        'mwh': round(amount_kwh_float / 1000, 4) if amount_kwh_float >= 1000 else None
+                    },
+                    'output': {
+                        'amount_eur': round(calculated_eur, 2),
+                        'currency': 'EUR'
+                    },
+                    'calculation': {
+                        'formula': f'{amount_kwh_float} kWh × {current_price} €/kWh = {calculated_eur:.2f} €',
+                        'price_per_kwh': current_price
+                    }
+                })
+                
+            except ValueError:
+                return jsonify({'error': 'Invalid amount_kwh value. Must be a number.'}), 400
+        
+        # Add peak hour warning if applicable
+        if price_info['is_peak_hour']:
+            result['peak_hour_notice'] = {
+                'message': f"Current time is peak hour ({price_info['current_hour']}:00). Price includes {price_info['peak_multiplier']}x multiplier.",
+                'base_price': price_info['base_price_eur_per_kwh'],
+                'current_price': current_price,
+                'savings_tip': f"Consider using energy during off-peak hours (outside {price_info['current_hour']}:00) to save {round((current_price - price_info['base_price_eur_per_kwh']) * 100 / current_price, 1)}%"
+            }
+        
+        # Add validity period info
+        if price_info.get('validity_until'):
+            try:
+                validity_dt = datetime.fromisoformat(price_info['validity_until'].replace('Z', '+00:00'))
+                result['validity'] = {
+                    'valid_until': price_info['validity_until'],
+                    'valid_for_hours': round((validity_dt - datetime.now()).total_seconds() / 3600, 1),
+                    'note': 'Price may change after this period. Recalculate for accurate results.'
+                }
+            except:
+                pass
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        logger.error(f"Error in budget calculator: {str(e)}")
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
 @app.route('/api/v1/analytics/consumption/peak-hours/dynamic', methods=['GET'])

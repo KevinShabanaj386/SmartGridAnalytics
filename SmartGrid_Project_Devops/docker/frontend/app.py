@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 # API Gateway URL
 API_GATEWAY_URL = os.getenv('API_GATEWAY_URL', 'http://smartgrid-api-gateway:5000')
+# Analytics Service URL
+ANALYTICS_SERVICE_URL = os.getenv('ANALYTICS_SERVICE_URL', 'http://smartgrid-analytics:5002')
 
 # Kosovo Collectors URLs
 KOSOVO_WEATHER_URL = os.getenv('KOSOVO_WEATHER_URL', 'http://kosovo-weather-collector:5007')
@@ -48,6 +50,11 @@ def dashboard():
 def analytics():
     """Faqja e analizave"""
     return render_template('analytics.html')
+
+@app.route('/budget-calculator')
+def budget_calculator():
+    """Kalkulator i buxhetit për energji"""
+    return render_template('budget-calculator.html')
 
 @app.route('/sensors')
 def sensors():
@@ -457,6 +464,38 @@ def get_kosovo_consumption_historical():
             pass
         return jsonify({'error': 'Service unavailable', 'status': 'service_down'}), 503
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/v1/analytics/budget-calculator', methods=['GET'])
+def proxy_budget_calculator():
+    """Proxy për budget calculator endpoint nga analytics service"""
+    try:
+        # Forward request to analytics service
+        params = request.args.to_dict()
+        response = requests.get(
+            f'{ANALYTICS_SERVICE_URL}/api/v1/analytics/budget-calculator',
+            params=params,
+            timeout=10
+        )
+        return jsonify(response.json()), response.status_code
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error connecting to analytics service: {e}")
+        # Try localhost fallback
+        try:
+            params = request.args.to_dict()
+            response = requests.get(
+                'http://localhost:5002/api/v1/analytics/budget-calculator',
+                params=params,
+                timeout=10
+            )
+            return jsonify(response.json()), response.status_code
+        except:
+            return jsonify({
+                'error': 'Analytics service unavailable',
+                'service_down': True
+            }), 503
+    except Exception as e:
+        logger.error(f"Error in budget calculator proxy: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
