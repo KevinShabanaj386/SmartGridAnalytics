@@ -90,11 +90,48 @@ def init_dag_tables():
             )
         """)
         
+        # Tabela për data lineage tracking (100% SECURITY)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS data_lineage (
+                id SERIAL PRIMARY KEY,
+                source_resource_type VARCHAR(100) NOT NULL,
+                source_resource_id VARCHAR(255),
+                target_resource_type VARCHAR(100) NOT NULL,
+                target_resource_id VARCHAR(255),
+                transformation_type VARCHAR(50),  -- copy, transform, aggregate, filter
+                transformation_details JSONB,
+                user_id INTEGER,
+                username VARCHAR(100),
+                timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Tabela për data flow tracking
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS data_flow (
+                id SERIAL PRIMARY KEY,
+                flow_id VARCHAR(100) NOT NULL,
+                step_number INTEGER NOT NULL,
+                resource_type VARCHAR(100) NOT NULL,
+                resource_id VARCHAR(255),
+                action VARCHAR(50) NOT NULL,  -- read, write, transform, aggregate
+                service_name VARCHAR(100),
+                user_id INTEGER,
+                timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                metadata JSONB,
+                UNIQUE(flow_id, step_number)
+            )
+        """)
+        
         # Indekset
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_dag_user ON data_access_logs(user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_dag_resource ON data_access_logs(resource_type)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_dag_timestamp ON data_access_logs(timestamp)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_dag_classification ON data_access_logs(classification)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_lineage_source ON data_lineage(source_resource_type, source_resource_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_lineage_target ON data_lineage(target_resource_type, target_resource_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_flow_id ON data_flow(flow_id)")
         
         # Insert default classifications
         for resource_type, classification in RESOURCE_CLASSIFICATION.items():
@@ -297,6 +334,166 @@ def get_sensitive_data_access(user_id: Optional[int] = None, days: int = 30) -> 
         return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
         logger.error(f"Error getting sensitive data access: {str(e)}")
+        return []
+    finally:
+        conn.close()
+
+def track_data_lineage(
+    source_resource_type: str,
+    source_resource_id: Optional[str],
+    target_resource_type: str,
+    target_resource_id: Optional[str],
+    transformation_type: str = 'copy',
+    transformation_details: Optional[Dict] = None,
+    user_id: Optional[int] = None,
+    username: Optional[str] = None
+) -> bool:
+    """
+    Track data lineage - tregon se si të dhënat lëvizin nëpër sistem (100% SECURITY)
+    """
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO data_lineage
+            (source_resource_type, source_resource_id, target_resource_type, target_resource_id,
+             transformation_type, transformation_details, user_id, username)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            source_resource_type, source_resource_id,
+            target_resource_type, target_resource_id,
+            transformation_type,
+            json.dumps(transformation_details) if transformation_details else None,
+            user_id, username
+        ))
+        
+        conn.commit()
+        logger.debug(f"Data lineage tracked: {source_resource_type} -> {target_resource_type}")
+        return True
+    except Exception as e:
+        logger.error(f"Error tracking data lineage: {str(e)}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def track_data_flow(
+    flow_id: str,
+    step_number: int,
+    resource_type: str,
+    resource_id: Optional[str],
+    action: str,
+    service_name: Optional[str] = None,
+    user_id: Optional[int] = None,
+    metadata: Optional[Dict] = None
+) -> bool:
+    """
+    Track data flow - tregon hapat e procesimit të të dhënave (100% SECURITY)
+    """
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO data_flow
+            (flow_id, step_number, resource_type, resource_id, action, service_name, user_id, metadata)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            flow_id, step_number, resource_type, resource_id, action,
+            service_name, user_id,
+            json.dumps(metadata) if metadata else None
+        ))
+        
+        conn.commit()
+        logger.debug(f"Data flow tracked: {flow_id} step {step_number}")
+        return True
+    except Exception as e:
+        logger.error(f"Error tracking data flow: {str(e)}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def get_data_lineage(
+    resource_type: Optional[str] = None,
+    resource_id: Optional[str] = None,
+    direction: str = 'both'  # 'upstream', 'downstream', 'both'
+) -> List[Dict[str, Any]]:
+    """
+    Merr data lineage për një resource (100% SECURITY)
+    """
+    conn = psycopg2.connect(**DB_CONFIG)
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        if direction == 'upstream' or direction == 'both':
+            # Merr upstream lineage (burimet)
+            query = """
+                SELECT * FROM data_lineage
+                WHERE target_resource_type = %s
+            """
+            params = [resource_type]
+            
+            if resource_id:
+                query += " AND target_resource_id = %s"
+                params.append(resource_id)
+            
+            query += " ORDER BY timestamp DESC"
+            cursor.execute(query, params)
+            upstream = [dict(row) for row in cursor.fetchall()]
+        else:
+            upstream = []
+        
+        if direction == 'downstream' or direction == 'both':
+            # Merr downstream lineage (destinacionet)
+            query = """
+                SELECT * FROM data_lineage
+                WHERE source_resource_type = %s
+            """
+            params = [resource_type]
+            
+            if resource_id:
+                query += " AND source_resource_id = %s"
+                params.append(resource_id)
+            
+            query += " ORDER BY timestamp DESC"
+            cursor.execute(query, params)
+            downstream = [dict(row) for row in cursor.fetchall()]
+        else:
+            downstream = []
+        
+        return {
+            'upstream': upstream,
+            'downstream': downstream
+        }
+    except Exception as e:
+        logger.error(f"Error getting data lineage: {str(e)}")
+        return {'upstream': [], 'downstream': []}
+    finally:
+        conn.close()
+
+def get_data_flow_trace(flow_id: str) -> List[Dict[str, Any]]:
+    """
+    Merr trace të plotë të data flow (100% SECURITY)
+    """
+    conn = psycopg2.connect(**DB_CONFIG)
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT * FROM data_flow
+            WHERE flow_id = %s
+            ORDER BY step_number ASC
+        """, (flow_id,))
+        
+        return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error getting data flow trace: {str(e)}")
         return []
     finally:
         conn.close()
