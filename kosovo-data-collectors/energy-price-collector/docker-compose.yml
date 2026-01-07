@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # Kafka për energy prices streaming
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: kosovo-price-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2182:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kosovo-price-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9093:9092"
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  # Kosovo Energy Price Collector
+  kosovo-energy-price-collector:
+    build: .
+    container_name: kosovo-energy-price-collector
+    ports:
+      - "5008:5008"
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - KAFKA_TOPIC_PRICES=kosovo-energy-prices
+      - COLLECTION_INTERVAL=86400  # 24 orë
+    depends_on:
+      - kafka
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+
+volumes:
+  kafka_data:
