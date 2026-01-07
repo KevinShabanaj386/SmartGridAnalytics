@@ -343,7 +343,7 @@ services:
     build: ./api_gateway
     container_name: smartgrid-api-gateway
     ports:
-      - "5010:5000"  # host:container mapping to avoid conflicts on common ports
+      - "5000:5000"  # API Gateway port (internal: 5000, external: 5000)
     environment:
       - DATA_INGESTION_SERVICE=http://smartgrid-data-ingestion:5001
       - DATA_PROCESSING_SERVICE=http://smartgrid-data-processing:5001
