@@ -475,6 +475,24 @@ services:
       - postgres
     restart: unless-stopped
 
+  # Trino Federated Query Engine (kërkesë e profesorit - Presto/Trino për pyetje ndër-platformëshe)
+  trino:
+    build: ./trino
+    container_name: smartgrid-trino
+    ports:
+      - "8080:8080"
+    environment:
+      - TRINO_USER=smartgrid
+      - TRINO_PASSWORD=smartgrid123
+    depends_on:
+      - postgres
+      - mongodb
+      - cassandra
+      - kafka
+    volumes:
+      - trino_data:/etc/trino
+    restart: unless-stopped
+
 volumes:
   pgdata:
   grafana_data:
@@ -490,3 +508,5 @@ volumes:
   mongodb_data:
   cassandra_data:
   tensorflow_models:
+  trino_data:
+  delta_lake_data:
