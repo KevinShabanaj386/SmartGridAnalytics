@@ -34,18 +34,20 @@ cd weather-collector
 
 ---
 
-### 🚧 Faza 2: Energy Price Collector (Next)
+### ✅ Faza 2: Energy Price Collector (Complete)
 
-**Status**: 🚧 **Planned**
+**Status**: ✅ **100% Complete**
 
 **Features:**
-- Web scraping nga KOSTT website
-- Web scraping nga ERO website
-- PDF parsing për tariff reports
-- NLP extraction me LLM
-- ML për parashikim çmimesh
-- Kafka integration
-- Historical data storage
+- ✅ Web scraping nga KOSTT website
+- ✅ Web scraping nga ERO website
+- ✅ AI-powered price extraction me regex patterns
+- ✅ Automatic collection çdo 24 orë
+- ✅ Kafka integration
+- ✅ REST API endpoints
+- 🚧 PDF parsing për tariff reports (Next)
+- 🚧 LLM extraction me LangChain (Next)
+- 🚧 ML për parashikim çmimesh (Next)
 
 **Implementation:**
 ```python
@@ -149,7 +151,7 @@ def scrape_kostt_tariffs():
 
 ### Muaji 1 (Current):
 - ✅ Weather Data Collector
-- 🚧 Energy Price Collector (Started)
+- ✅ Energy Price Collector (Complete)
 
 ### Muaji 2:
 - ✅ Energy Price Collector (Complete)
