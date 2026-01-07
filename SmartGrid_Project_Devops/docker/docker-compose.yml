@@ -406,6 +406,20 @@ services:
       - kafka
     restart: unless-stopped
 
+  kosovo-energy-price-collector:
+    build: ./kosovo-energy-price-collector
+    container_name: smartgrid-kosovo-price
+    ports:
+      - "5012:5008"  # host:5012 -> container:5008 to avoid OS port conflict
+    restart: unless-stopped
+
+  kosovo-consumption-collector:
+    build: ./kosovo-consumption-collector
+    container_name: smartgrid-kosovo-consumption
+    ports:
+      - "5009:5009"
+    restart: unless-stopped
+
   # Apache Spark Structured Streaming Service (bazuar në Real-Time Energy Monitoring System)
   # Temporarily disabled - Spark image version issue
   # spark-streaming:

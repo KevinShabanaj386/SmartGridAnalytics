@@ -259,9 +259,9 @@ def collect_all_weather_data() -> List[Dict[str, Any]]:
             producer = get_producer()
             if producer:
                 try:
-                    producer.send(
+                producer.send(
                         KAFKA_TOPIC_WEATHER,
-                        key=city_key.encode('utf-8'),
+                        key=city_key,  # let key_serializer handle encoding
                         value=weather_data
                     )
                     logger.info(f"Weather data sent to Kafka for {city_info['name']}")
@@ -298,9 +298,9 @@ def health_check():
         'timestamp': datetime.utcnow().isoformat()
     }), 200
 
-@app.route('/api/v1/collect', methods=['POST'])
+@app.route('/api/v1/collect', methods=['GET', 'POST'])
 def manual_collect():
-    """Manual collection trigger"""
+    """Manual collection trigger (supports GET and POST)"""
     try:
         data = collect_all_weather_data()
         return jsonify({
