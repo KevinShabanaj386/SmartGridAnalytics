@@ -121,7 +121,7 @@ services:
       - ../elk/logstash/config:/usr/share/logstash/config
     ports:
       - "5044:5044"
-      - "5000:5000"  # TCP input për logs
+      - "50000:5000"  # TCP input për logs (host:50000 -> container:5000)
       - "9600:9600"
     environment:
       - "LS_JAVA_OPTS=-Xmx512m -Xms512m"
@@ -230,6 +230,8 @@ services:
 
   # Cassandra për hybrid storage - time-series data dhe high write throughput (100% HYBRID STORAGE)
   cassandra:
+    profiles:
+      - cassandra
     image: cassandra:4.1
     container_name: smartgrid-cassandra
     ports:
@@ -477,6 +479,8 @@ services:
 
   # Trino Federated Query Engine (kërkesë e profesorit - Presto/Trino për pyetje ndër-platformëshe)
   trino:
+    profiles:
+      - cassandra
     build: ./trino
     container_name: smartgrid-trino
     ports:
