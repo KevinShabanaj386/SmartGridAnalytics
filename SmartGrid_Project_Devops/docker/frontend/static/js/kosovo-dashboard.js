@@ -1,5 +1,6 @@
 // Kosovo Dashboard JavaScript
 let consumptionChart = null;
+let priceSparklineChart = null;
 let refreshInterval = null;
 
 // Load all Kosovo data
@@ -8,7 +9,10 @@ async function loadKosovoDashboard() {
         const results = await Promise.allSettled([
             loadWeatherSummary(),
             loadPricesSummary(),
-            loadConsumptionSummary()
+            loadConsumptionSummary(),
+            loadPricesLongTermSummary(),
+            loadConsumptionLongTermSummary(),
+            loadPriceSparkline()
         ]);
         
         // Check for service status
@@ -161,8 +165,119 @@ async function loadPricesSummary() {
         }
     } catch (error) {
         console.error('Error loading prices:', error);
-        container.innerHTML = `<p style="color: #ef4444;">❌ Gabim: ${error.message || 'Service unavailable'}</p>`;
+        container.innerHTML = `<p style=\"color: #ef4444;\">❌ Gabim: ${error.message || 'Service unavailable'}</p>`;
     }
+}
+
+// Load long-term price trends (2010–sot)
+async function loadPricesLongTermSummary() {
+    const container = document.getElementById('pricesLongTermSummary');
+    if (!container) return;
+
+    try {
+        const response = await fetch('/api/kosovo/prices/historical?from_year=2010');
+        const data = await response.json();
+
+        if (data.status !== 'success' || !data.data || !data.data.length) {
+            container.innerHTML = '<p>Nuk ka të dhëna historike të disponueshme.</p>';
+            return;
+        }
+
+        const sorted = [...data.data].sort((a, b) => a.year - b.year);
+        const first = sorted[0];
+        const last = sorted[sorted.length - 1];
+
+        if (!first || !last || !first.import_price_eur_per_mwh || !last.import_price_eur_per_mwh) {
+            container.innerHTML = '<p>Nuk mund të llogariten trendet afatgjata.</p>';
+            return;
+        }
+
+        const importChangeAbs = last.import_price_eur_per_mwh - first.import_price_eur_per_mwh;
+        const importChangePct = first.import_price_eur_per_mwh > 0
+            ? (importChangeAbs / first.import_price_eur_per_mwh) * 100
+            : 0;
+        const importShareChange = (last.import_share_percent || 0) - (first.import_share_percent || 0);
+
+        container.innerHTML = `
+            <p>
+                Që nga <strong>${first.year}</strong> deri në <strong>${last.year}</strong>,
+                çmimi mesatar i importit është
+                <strong>${importChangeAbs >= 0 ? 'rritur' : 'ulur'} me ${Math.abs(importChangePct).toFixed(1)}%</strong>.
+            </p>
+            <p>
+                Pjesëmarrja e importit në furnizim ka ndryshuar me
+                <strong>${importShareChange >= 0 ? '+' : ''}${importShareChange.toFixed(1)} pp</strong>.
+            </p>
+        `;
+    } catch (error) {
+        console.error('Error loading long-term price trends:', error);
+        container.innerHTML = '<p style="color: #ef4444;">Gabim në ngarkimin e trendeve afatgjata.</p>';
+    }
+}
+
+// Small sparkline chart for import prices (last years)
+async function loadPriceSparkline() {
+    const canvas = document.getElementById('priceSparkline');
+    if (!canvas) return;
+
+    try {
+        const response = await fetch('/api/kosovo/prices/historical?from_year=2015');
+        const data = await response.json();
+
+        if (data.status === 'success' && data.data && data.data.length) {
+            updatePriceSparklineChart(data.data);
+        }
+    } catch (error) {
+        console.error('Error loading price sparkline:', error);
+    }
+}
+
+function updatePriceSparklineChart(historyData) {
+    const ctx = document.getElementById('priceSparkline');
+    if (!ctx) return;
+
+    if (priceSparklineChart) {
+        priceSparklineChart.destroy();
+    }
+
+    const sorted = [...historyData].sort((a, b) => a.year - b.year);
+    const labels = sorted.map(d => d.year);
+    const importPrices = sorted.map(d => d.import_price_eur_per_mwh);
+
+    priceSparklineChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Import (€/MWh)',
+                data: importPrices,
+                borderColor: 'rgb(37, 99, 235)',
+                backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                tension: 0.3,
+                fill: true,
+                pointRadius: 0,
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    ticks: { display: false },
+                    grid: { display: false }
+                },
+                x: {
+                    ticks: { display: false },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
 }
 
 // Load consumption summary
@@ -202,6 +317,54 @@ async function loadConsumptionSummary() {
         console.error('Error loading consumption:', error);
         const totalEl = document.getElementById('totalConsumption');
         if (totalEl) totalEl.textContent = 'Error';
+    }
+}
+
+// Load long-term consumption trends (2010–sot)
+async function loadConsumptionLongTermSummary() {
+    const container = document.getElementById('consumptionLongTermSummary');
+    if (!container) return;
+
+    try {
+        const response = await fetch('/api/kosovo/consumption/yearly?from_year=2010');
+        const data = await response.json();
+
+        if (data.status !== 'success' || !data.data || !data.data.length) {
+            container.innerHTML = '<p>Nuk ka të dhëna historike të disponueshme.</p>';
+            return;
+        }
+
+        const sorted = [...data.data].sort((a, b) => a.year - b.year);
+        const first = sorted[0];
+        const last = sorted[sorted.length - 1];
+
+        const firstVal = first.total_consumption_gwh || first.total_consumption_mw || 0;
+        const lastVal = last.total_consumption_gwh || last.total_consumption_mw || 0;
+
+        if (!firstVal || !lastVal) {
+            container.innerHTML = '<p>Nuk mund të llogariten trendet afatgjata të konsumit.</p>';
+            return;
+        }
+
+        const diffPct = ((lastVal - firstVal) / firstVal) * 100;
+        const importShareChange = (last.import_share_percent || 0) - (first.import_share_percent || 0);
+        const unit = first.total_consumption_gwh ? 'GWh' : 'MW';
+
+        container.innerHTML = `
+            <p>
+                Që nga <strong>${first.year}</strong> deri në <strong>${last.year}</strong>,
+                konsumi total është
+                <strong>${diffPct >= 0 ? 'rritur' : 'ulur'} me ${Math.abs(diffPct).toFixed(1)}%</strong>
+                (${firstVal.toFixed(1)} → ${lastVal.toFixed(1)} ${unit}).
+            </p>
+            <p>
+                Pjesëmarrja e importit në konsum ka ndryshuar me
+                <strong>${importShareChange >= 0 ? '+' : ''}${importShareChange.toFixed(1)} pp</strong>.
+            </p>
+        `;
+    } catch (error) {
+        console.error('Error loading long-term consumption trends:', error);
+        container.innerHTML = '<p style="color: #ef4444;">Gabim në ngarkimin e trendeve afatgjata të konsumit.</p>';
     }
 }
 
@@ -264,10 +427,13 @@ function refreshWeather() {
 
 function refreshPrices() {
     loadPricesSummary();
+    loadPricesLongTermSummary();
+    loadPriceSparkline();
 }
 
 function refreshConsumption() {
     loadConsumptionSummary();
+    loadConsumptionLongTermSummary();
 }
 
 // Auto-refresh every 60 seconds
