@@ -18,6 +18,15 @@ import sys
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Import Hybrid Storage (100% HYBRID STORAGE MODELS)
+try:
+    from hybrid_storage import get_hybrid_storage
+    HYBRID_STORAGE_AVAILABLE = True
+    logger.info("Hybrid storage available (PostgreSQL + MongoDB + Cassandra)")
+except ImportError:
+    HYBRID_STORAGE_AVAILABLE = False
+    logger.warning("Hybrid storage not available, using PostgreSQL only")
+
 def deserialize_message(message_value: bytes, schema_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Deserialize message from Kafka (try Avro first, fallback to JSON)
