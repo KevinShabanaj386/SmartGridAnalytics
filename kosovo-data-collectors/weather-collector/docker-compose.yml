@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # Kafka për weather data streaming
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: kosovo-weather-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kosovo-weather-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  # Kosovo Weather Data Collector
+  kosovo-weather-collector:
+    build: .
+    container_name: kosovo-weather-collector
+    ports:
+      - "5007:5007"
+    environment:
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY:-}
+      - KAFKA_BROKER=kafka:9092
+      - KAFKA_TOPIC_WEATHER=kosovo-weather-data
+      - COLLECTION_INTERVAL=3600
+    depends_on:
+      - kafka
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data  # Persist collected data
+
+volumes:
+  kafka_data:
