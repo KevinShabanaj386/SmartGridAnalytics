@@ -1,0 +1,85 @@
+/* Kosovo Data Dashboard Styles */
+
+.card-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.875rem;
+}
+
+.data-summary {
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+.city-weather-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px;
+    margin: 5px 0;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    border-left: 3px solid var(--neon-cyan);
+}
+
+.price-item {
+    padding: 12px;
+    margin: 8px 0;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border-left: 3px solid var(--neon-green);
+}
+
+.price-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--neon-green);
+    margin: 5px 0;
+}
+
+.region-consumption {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    margin: 5px 0;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+}
+
+.region-name {
+    font-weight: 600;
+    color: var(--neon-cyan);
+}
+
+.consumption-value {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--neon-green);
+}
+
+.source-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    background: rgba(0, 243, 255, 0.2);
+    border: 1px solid var(--neon-cyan);
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin-left: 8px;
+}
+
+.refresh-btn {
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.refresh-btn:hover {
+    transform: rotate(180deg);
+}

@@ -367,6 +367,10 @@ services:
     environment:
       - API_GATEWAY_URL=http://smartgrid-api-gateway:5000
       - SECRET_KEY=dev-secret-key-change-in-production
+      # Kosovo Collectors URLs (fallback to localhost if not in same network)
+      - KOSOVO_WEATHER_URL=http://kosovo-weather-collector:5007
+      - KOSOVO_PRICE_URL=http://kosovo-energy-price-collector:5008
+      - KOSOVO_CONSUMPTION_URL=http://kosovo-consumption-collector:5009
     depends_on:
       - api-gateway
     restart: unless-stopped

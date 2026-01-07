@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Çmimet e Energjisë - Kosovo | Smart Grid Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/css/modern-style.css?v=2.0">
+    <link rel="stylesheet" href="/static/css/kosovo.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ Çmimet e Energjisë - Kosovo</h1>
+            <nav class="nav">
+                <a href="/">Dashboard</a>
+                <a href="/kosovo">Kosovo</a>
+                <a href="/kosovo/weather">Moti</a>
+                <a href="/kosovo/prices" class="active">Çmimet</a>
+                <a href="/kosovo/consumption">Konsumi</a>
+            </nav>
+        </div>
+        
+        <main>
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3>📊 Krahasimi i Çmimeve</h3>
+                    <button class="btn" onclick="refreshData()">🔄 Refresh</button>
+                </div>
+                <div class="chart-container">
+                    <canvas id="pricesChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>💰 Detajet e Çmimeve</h3>
+                <div id="pricesDetails" class="data-summary">
+                    <p>Duke ngarkuar...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="/static/js/kosovo-prices.js"></script>
+</body>
+</html>

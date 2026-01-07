@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 # API Gateway URL
 API_GATEWAY_URL = os.getenv('API_GATEWAY_URL', 'http://smartgrid-api-gateway:5000')
 
+# Kosovo Collectors URLs
+KOSOVO_WEATHER_URL = os.getenv('KOSOVO_WEATHER_URL', 'http://kosovo-weather-collector:5007')
+KOSOVO_PRICE_URL = os.getenv('KOSOVO_PRICE_URL', 'http://kosovo-energy-price-collector:5008')
+KOSOVO_CONSUMPTION_URL = os.getenv('KOSOVO_CONSUMPTION_URL', 'http://kosovo-consumption-collector:5009')
+
 # JWT Token storage (në prodhim, përdorni session ose cookies)
 user_token = None
 
@@ -39,6 +44,26 @@ def analytics():
 def sensors():
     """Faqja e sensorëve"""
     return render_template('sensors.html')
+
+@app.route('/kosovo')
+def kosovo():
+    """Faqja e të dhënave të Kosovës"""
+    return render_template('kosovo/dashboard.html')
+
+@app.route('/kosovo/weather')
+def kosovo_weather():
+    """Faqja e të dhënave moti për Kosovën"""
+    return render_template('kosovo/weather.html')
+
+@app.route('/kosovo/prices')
+def kosovo_prices():
+    """Faqja e çmimeve të energjisë për Kosovën"""
+    return render_template('kosovo/prices.html')
+
+@app.route('/kosovo/consumption')
+def kosovo_consumption():
+    """Faqja e konsumit të energjisë për Kosovën"""
+    return render_template('kosovo/consumption.html')
 
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -252,6 +277,120 @@ def health():
     try:
         response = requests.get(f"{API_GATEWAY_URL}/health")
         return jsonify(response.json())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Kosovo Data API Endpoints
+@app.route('/api/kosovo/weather', methods=['GET'])
+def get_kosovo_weather():
+    """Merr të dhëna moti për Kosovën"""
+    try:
+        # Try configured URL first
+        response = requests.get(f'{KOSOVO_WEATHER_URL}/api/v1/collect', timeout=5)
+        if response.status_code == 200:
+            return jsonify(response.json())
+        else:
+            return jsonify({'error': 'Failed to fetch weather data'}), response.status_code
+    except requests.exceptions.RequestException:
+        # Fallback: try localhost
+        try:
+            response = requests.get('http://localhost:5007/api/v1/collect', timeout=5)
+            if response.status_code == 200:
+                return jsonify(response.json())
+        except:
+            pass
+        return jsonify({'error': 'Weather service unavailable', 'status': 'service_down'}), 503
+    except Exception as e:
+        logger.error(f"Error fetching Kosovo weather: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/kosovo/weather/cities', methods=['GET'])
+def get_kosovo_weather_cities():
+    """Merr listën e qyteteve të monitoruara"""
+    try:
+        response = requests.get(f'{KOSOVO_WEATHER_URL}/api/v1/cities', timeout=5)
+        if response.status_code == 200:
+            return jsonify(response.json())
+        else:
+            return jsonify({'error': 'Failed to fetch cities'}), response.status_code
+    except requests.exceptions.RequestException:
+        try:
+            response = requests.get('http://localhost:5007/api/v1/cities', timeout=5)
+            if response.status_code == 200:
+                return jsonify(response.json())
+        except:
+            pass
+        return jsonify({'error': 'Service unavailable'}), 503
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/kosovo/prices', methods=['GET'])
+def get_kosovo_prices():
+    """Merr çmimet e energjisë për Kosovën"""
+    try:
+        response = requests.get(f'{KOSOVO_PRICE_URL}/api/v1/prices/latest', timeout=5)
+        if response.status_code == 200:
+            return jsonify(response.json())
+        else:
+            return jsonify({'error': 'Failed to fetch prices'}), response.status_code
+    except requests.exceptions.RequestException:
+        try:
+            response = requests.get('http://localhost:5008/api/v1/prices/latest', timeout=5)
+            if response.status_code == 200:
+                return jsonify(response.json())
+        except:
+            pass
+        return jsonify({'error': 'Price service unavailable', 'status': 'service_down'}), 503
+    except Exception as e:
+        logger.error(f"Error fetching Kosovo prices: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/kosovo/consumption', methods=['GET'])
+def get_kosovo_consumption():
+    """Merr konsumin e energjisë për Kosovën"""
+    try:
+        response = requests.get(f'{KOSOVO_CONSUMPTION_URL}/api/v1/consumption/latest', timeout=5)
+        if response.status_code == 200:
+            return jsonify(response.json())
+        else:
+            return jsonify({'error': 'Failed to fetch consumption'}), response.status_code
+    except requests.exceptions.RequestException:
+        try:
+            response = requests.get('http://localhost:5009/api/v1/consumption/latest', timeout=5)
+            if response.status_code == 200:
+                return jsonify(response.json())
+        except:
+            pass
+        return jsonify({'error': 'Consumption service unavailable', 'status': 'service_down'}), 503
+    except Exception as e:
+        logger.error(f"Error fetching Kosovo consumption: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/kosovo/consumption/historical', methods=['GET'])
+def get_kosovo_consumption_historical():
+    """Merr konsumin historik për Kosovën"""
+    try:
+        hours = request.args.get('hours', 24)
+        response = requests.get(
+            f'{KOSOVO_CONSUMPTION_URL}/api/v1/consumption/historical?hours={hours}',
+            timeout=10
+        )
+        if response.status_code == 200:
+            return jsonify(response.json())
+        else:
+            return jsonify({'error': 'Failed to fetch historical data'}), response.status_code
+    except requests.exceptions.RequestException:
+        try:
+            hours = request.args.get('hours', 24)
+            response = requests.get(
+                f'http://localhost:5009/api/v1/consumption/historical?hours={hours}',
+                timeout=10
+            )
+            if response.status_code == 200:
+                return jsonify(response.json())
+        except:
+            pass
+        return jsonify({'error': 'Service unavailable', 'status': 'service_down'}), 503
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

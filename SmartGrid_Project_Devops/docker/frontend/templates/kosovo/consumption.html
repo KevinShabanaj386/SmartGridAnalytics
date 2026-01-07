@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Konsumi i Energjisë - Kosovo | Smart Grid Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/css/modern-style.css?v=2.0">
+    <link rel="stylesheet" href="/static/css/kosovo.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Konsumi i Energjisë - Kosovo</h1>
+            <nav class="nav">
+                <a href="/">Dashboard</a>
+                <a href="/kosovo">Kosovo</a>
+                <a href="/kosovo/weather">Moti</a>
+                <a href="/kosovo/prices">Çmimet</a>
+                <a href="/kosovo/consumption" class="active">Konsumi</a>
+            </nav>
+        </div>
+        
+        <main>
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3>📈 Konsumi Total dhe Rajonal</h3>
+                    <div>
+                        <input type="number" id="hoursInput" value="24" min="1" max="168" style="width: 80px; padding: 5px; margin-right: 10px;">
+                        <button class="btn" onclick="loadHistorical()">Shiko Historikun</button>
+                        <button class="btn" onclick="refreshData()">🔄 Refresh</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="consumptionChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h3>🏙️ Konsumi sipas Rajoneve</h3>
+                    <div id="regionsDetails" class="data-summary">
+                        <p>Duke ngarkuar...</p>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>📊 Trendi Historik</h3>
+                    <div class="chart-container">
+                        <canvas id="historicalChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="/static/js/kosovo-consumption.js"></script>
+</body>
+</html>
