@@ -46,69 +46,130 @@ jobs:
         working-directory: SmartGrid_Project_Devops/docker/api_gateway
         run: |
           pip install -r requirements.txt
-          python -c "import app; print('API Gateway imports OK')"
+          python - << 'EOF'
+import sys
+try:
+    import app
+    print('API Gateway imports OK')
+except Exception as e:
+    print(f'Import failed: {e}')
+    sys.exit(1)
+EOF
 
       - name: Test Data Ingestion Service
         working-directory: SmartGrid_Project_Devops/docker/data-ingestion-service
         run: |
           pip install -r requirements.txt
+          # Verify that the service code imports correctly without requiring Kafka
           python - << 'EOF'
-          try:
-              import app
-              print('Data Ingestion imports OK')
-          except Exception as e:
-              print(f'Import failed: {e}')
-              exit(1)
-          EOF
+import sys
+try:
+    import app
+    print('Data Ingestion imports OK')
+except Exception as e:
+    print(f'Import failed: {e}')
+    sys.exit(1)
+EOF
 
       - name: Test Notification Service
         working-directory: SmartGrid_Project_Devops/docker/notification-service
         run: |
           pip install -r requirements.txt
-          python -c "import app; print('Notification Service imports OK')"
+          python - << 'EOF'
+import sys
+try:
+    import app
+    print('Notification Service imports OK')
+except Exception as e:
+    print(f'Import failed: {e}')
+    sys.exit(1)
+EOF
 
       - name: Test Data Processing Service
         working-directory: SmartGrid_Project_Devops/docker/data-processing-service
         run: |
           pip install -r requirements.txt
-          python -c "import app; print('Data Processing imports OK')"
           python - << 'EOF'
-          try:
-              from delta_lake_storage import store_sensor_data_delta
-              print('Delta Lake imports OK')
-          except ImportError as e:
-              print(f'Warning: {e}')
-          EOF || true
+import sys
+try:
+    import app
+    print('Data Processing imports OK')
+except Exception as e:
+    print(f'Import failed: {e}')
+    sys.exit(1)
+
+# Optional: Delta Lake integration (do not fail pipeline if missing)
+try:
+    from delta_lake_storage import store_sensor_data_delta, get_spark_session
+    print('Delta Lake storage imports OK')
+except ImportError as e:
+    print(f'Warning: Delta Lake not available: {e}')
+EOF
 
       - name: Test Analytics Service
         working-directory: SmartGrid_Project_Devops/docker/analytics-service
         run: |
           pip install -r requirements.txt
+          # Optional test: log warnings but do not fail CI
           python - << 'EOF'
-          try:
-              import app
-              print('Analytics Service imports OK')
-          except ImportError as e:
-              print(f'Warning: {e}')
-          EOF || true
+try:
+    import app
+    print('Analytics Service imports OK')
+except ImportError as e:
+    print(f'Warning: Some optional imports may have failed: {e}')
+    # Try importing with adjusted sys.path (basic import check)
+    import sys
+    sys.path.insert(0, '.')
+    print('Analytics Service basic imports attempted')
+# Optional: Trino client
+try:
+    from trino_client import execute_federated_query, get_available_catalogs
+    print('Trino client imports OK')
+except ImportError as e:
+    print(f'Warning: Trino client not available: {e}')
+EOF
 
       - name: Test User Management Service
         working-directory: SmartGrid_Project_Devops/docker/user-management-service
         run: |
           pip install -r requirements.txt
-          python -c "import app; print('User Management imports OK')" || true
+          # Optional: log warnings but do not fail CI
+          python - << 'EOF'
+try:
+    import app
+    print('User Management Service imports OK')
+except ImportError as e:
+    print(f'Warning: Some optional imports may have failed: {e}')
+    print('User Management Service basic imports attempted')
+EOF
 
       - name: Test Frontend Service
         working-directory: SmartGrid_Project_Devops/docker/frontend
         run: |
           pip install -r requirements.txt
-          python -c "import app; print('Frontend imports OK')"
+          python - << 'EOF'
+import sys
+try:
+    import app
+    print('Frontend Service imports OK')
+except Exception as e:
+    print(f'Import failed: {e}')
+    sys.exit(1)
+EOF
 
       - name: Test Weather Producer Service
         working-directory: SmartGrid_Project_Devops/docker/weather-producer-service
         run: |
           pip install -r requirements.txt
-          python -c "import app; print('Weather Producer imports OK')"
+          python - << 'EOF'
+import sys
+try:
+    import app
+    print('Weather Producer Service imports OK')
+except Exception as e:
+    print(f'Import failed: {e}')
+    sys.exit(1)
+EOF
 
   # =========================
   # BUILD DOCKER IMAGES
@@ -132,58 +193,181 @@ jobs:
           - weather-producer-service
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Login to GHCR
+      - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build image
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+
+      - name: Verify build context exists
+        run: |
+          BUILD_CONTEXT="SmartGrid_Project_Devops/docker/${{ matrix.service }}"
+          echo "Checking for build context: $BUILD_CONTEXT"
+          if [ ! -d "$BUILD_CONTEXT" ]; then
+            echo "❌ Error: Build context directory '$BUILD_CONTEXT' does not exist!"
+            echo ""
+            echo "Current working directory: $(pwd)"
+            echo "Repository contents:"
+            ls -la SmartGrid_Project_Devops/docker/ | head -20
+            echo ""
+            echo "Available service directories:"
+            ls -d SmartGrid_Project_Devops/docker/*/ 2>/dev/null | sed 's|SmartGrid_Project_Devops/docker/||' | sed 's|/||' || echo "None found"
+            exit 1
+          fi
+          echo "✅ Build context '$BUILD_CONTEXT' exists"
+          echo "Contents of $BUILD_CONTEXT:"
+          ls -la "$BUILD_CONTEXT" || echo "Could not list contents"
+          if [ ! -f "$BUILD_CONTEXT/Dockerfile" ] && [ ! -f "$BUILD_CONTEXT/dockerfile" ]; then
+            echo "⚠️ Warning: No Dockerfile found in $BUILD_CONTEXT"
+            echo "Looking for Dockerfile variants..."
+            find "$BUILD_CONTEXT" -iname "*dockerfile*" -o -iname "Dockerfile*" 2>/dev/null || echo "No Dockerfile variants found"
+          else
+            echo "✅ Dockerfile found"
+          fi
+
+      - name: Build Docker image
         uses: docker/build-push-action@v5
+        id: build
         with:
           context: SmartGrid_Project_Devops/docker/${{ matrix.service }}
           push: false
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Push Docker image (optional)
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: docker/build-push-action@v5
+        with:
+          context: SmartGrid_Project_Devops/docker/${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # =========================
-  # DEPLOY (MAIN ONLY)
+  # DEPLOY (MAIN ONLY, CLIENT-SIDE VALIDATION ONLY)
   # =========================
   deploy:
-    name: Deploy në Kubernetes
+    name: Deploy në Kubernetes (client-side validation only)
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Check KUBECONFIG
-        id: kube
+      - name: Set up Python for manifest validation
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install PyYAML for manifest validation
         run: |
-          if [ -z "${{ secrets.KUBECONFIG }}" ]; then
-            echo "available=false" >> $GITHUB_OUTPUT
-          else
-            echo "available=true" >> $GITHUB_OUTPUT
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Client-side validation of Kubernetes manifests (YAML + basic structure)
+        run: |
+          echo "=== Client-side validation of Kubernetes manifests ==="
+          echo "This step validates YAML syntax and basic Kubernetes fields without contacting a cluster."
+          echo ""
+
+          if [ ! -d "SmartGrid_Project_Devops/kubernetes" ]; then
+            echo "❌ Error: Kubernetes directory not found"
+            exit 1
           fi
 
-      - name: Deploy
-        if: steps.kube.outputs.available == 'true'
-        env:
-          KUBECONFIG: ${{ secrets.KUBECONFIG }}
-        run: |
-          mkdir -p ~/.kube
-          echo "$KUBECONFIG" > ~/.kube/config
-          kubectl get nodes
+          VALIDATION_ERRORS=0
 
-      - name: Skip deploy
-        if: steps.kube.outputs.available == 'false'
-        run: |
-          echo "KUBECONFIG not set, skipping deployment."
+          validate_file() {
+            local f="$1"
+            if [ -f "$f" ]; then
+              echo "Validating: $f"
+              python - "$f" << 'EOF'
+import sys, yaml, os
+
+path = sys.argv[1]
+try:
+    with open(path, "r", encoding="utf-8") as fh:
+        docs = list(yaml.safe_load_all(fh))
+except Exception as e:
+    print(f"YAML parse error in {path}: {e}")
+    sys.exit(1)
+
+if not docs:
+    print(f"{path}: empty YAML document")
+    sys.exit(1)
+
+for i, doc in enumerate(docs, 1):
+    if not isinstance(doc, dict):
+        print(f"{path}: document {i} is not a mapping (got {type(doc).__name__})")
+        sys.exit(1)
+    required = ("apiVersion", "kind", "metadata")
+    missing = [k for k in required if k not in doc]
+    if missing:
+        print(f"{path}: document {i} missing required field(s): {', '.join(missing)}")
+        sys.exit(1)
+
+sys.exit(0)
+EOF
+              if [ $? -ne 0 ]; then
+                echo "  ❌ Validation failed for: $f"
+                VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
+              else:
+                echo "  ✅ Valid: $f"
+              fi
+            fi
+          }
+
+          # Top-level manifests
+          for f in SmartGrid_Project_Devops/kubernetes/*.yaml SmartGrid_Project_Devops/kubernetes/*.yml; do
+            validate_file "$f"
+          done
+
+          # Subdirectories (e.g. infrastructure, services, etc.)
+          for dir in SmartGrid_Project_Devops/kubernetes/*/; do
+            if [ -d "$dir" ]; then
+              echo "--- Directory: $dir ---"
+              for f in "$dir"*.yaml "$dir"*.yml; do
+                validate_file "$f"
+              done
+            fi
+          done
+
+          if [ $VALIDATION_ERRORS -gt 0 ]; then
+            echo ""
+            echo "⚠️ Validation failed for $VALIDATION_ERRORS file(s)."
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ All manifest files passed YAML + basic structure validation."
+          echo "ℹ️ Real cluster deployment is not performed in CI (school project)."
 
   # =========================
   # SECURITY SCAN
@@ -193,18 +377,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Run Trivy
+      - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: fs
-          scan-ref: .
-          format: sarif
-          output: trivy-results.sarif
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
 
-      - name: Upload Trivy results
+      - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: trivy-results.sarif
+          sarif_file: 'trivy-results.sarif'
         continue-on-error: true
