@@ -296,8 +296,17 @@ jobs:
         echo ""
         echo "✅ All manifest files passed client-side validation."
 
+    - name: Check KUBECONFIG availability
+      id: check_kubeconfig
+      run: |
+        if [ -n "${{ secrets.KUBECONFIG }}" ]; then
+          echo "available=true" >> $GITHUB_OUTPUT
+        else
+          echo "available=false" >> $GITHUB_OUTPUT
+        fi
+
     - name: Deploy to cluster (if KUBECONFIG available)
-      if: ${{ secrets.KUBECONFIG != '' && secrets.KUBECONFIG != null }}
+      if: steps.check_kubeconfig.outputs.available == 'true'
       env:
         KUBECONFIG: ${{ secrets.KUBECONFIG }}
       run: |
@@ -359,7 +368,7 @@ jobs:
         echo "✅ Deployment verification completed"
     
     - name: Skip deployment (no KUBECONFIG)
-      if: ${{ secrets.KUBECONFIG == '' || secrets.KUBECONFIG == null }}
+      if: steps.check_kubeconfig.outputs.available == 'false'
       run: |
         echo "=== Skipping Kubernetes Deployment ==="
         echo "KUBECONFIG secret is not set. Skipping Kubernetes deployment."
