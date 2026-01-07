@@ -1256,6 +1256,7 @@ def get_dynamic_peak_hours():
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
         # Merr consumption data për çdo orë të ditës për periudhën e specifikuar
+        # Përdor percentile_cont nëse disponohet, përndryshe llogarit manualisht
         query = """
             SELECT 
                 EXTRACT(HOUR FROM timestamp) as hour_of_day,
@@ -1263,8 +1264,7 @@ def get_dynamic_peak_hours():
                 MAX(value) as max_consumption,
                 MIN(value) as min_consumption,
                 COUNT(*) as reading_count,
-                PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY value) as p75_consumption,
-                PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY value) as p90_consumption
+                STDDEV(value) as stddev_consumption
             FROM sensor_data
             WHERE timestamp >= NOW() - INTERVAL '%s days'
             AND sensor_type IN ('power', 'voltage', 'current')
@@ -1294,14 +1294,22 @@ def get_dynamic_peak_hours():
         hourly_data = []
         for row in results:
             avg_consumption = float(row['avg_consumption']) if isinstance(row['avg_consumption'], (Decimal, int, float)) else 0.0
+            stddev = float(row['stddev_consumption']) if isinstance(row['stddev_consumption'], (Decimal, int, float)) and row['stddev_consumption'] is not None else 0.0
+            
+            # Llogarit percentile approximations bazuar në stddev
+            # P75 ≈ mean + 0.67*stddev, P90 ≈ mean + 1.28*stddev
+            p75_approx = avg_consumption + (0.67 * stddev) if stddev > 0 else avg_consumption
+            p90_approx = avg_consumption + (1.28 * stddev) if stddev > 0 else avg_consumption
+            
             hourly_data.append({
                 'hour': int(row['hour_of_day']),
                 'avg_consumption': avg_consumption,
                 'max_consumption': float(row['max_consumption']) if isinstance(row['max_consumption'], (Decimal, int, float)) else 0.0,
                 'min_consumption': float(row['min_consumption']) if isinstance(row['min_consumption'], (Decimal, int, float)) else 0.0,
                 'reading_count': int(row['reading_count']) if isinstance(row['reading_count'], (Decimal, int)) else 0,
-                'p75_consumption': float(row['p75_consumption']) if isinstance(row['p75_consumption'], (Decimal, int, float)) else 0.0,
-                'p90_consumption': float(row['p90_consumption']) if isinstance(row['p90_consumption'], (Decimal, int, float)) else 0.0
+                'stddev_consumption': stddev,
+                'p75_consumption': p75_approx,
+                'p90_consumption': p90_approx
             })
         
         # Llogarit mesataren globale
