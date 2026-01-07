@@ -227,6 +227,7 @@ jobs:
         cache-to: type=gha,mode=max
 
   # Job për deployment në Kubernetes (nëse është main branch)
+    # Job për deployment në Kubernetes (nëse është main branch)
   deploy:
     name: Deploy në Kubernetes (client-side validation only)
     runs-on: ubuntu-latest
@@ -238,24 +239,21 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up kubectl
-      uses: azure/setup-kubectl@v3
+    - name: Set up Python for manifest validation
+      uses: actions/setup-python@v4
       with:
-        version: 'latest'
+        python-version: '3.11'
 
-    - name: Client-side validation of Kubernetes manifests (no cluster)
+    - name: Install PyYAML for manifest validation
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyyaml
+
+    - name: Client-side validation of Kubernetes manifests (YAML + basic structure)
       run: |
         echo "=== Client-side validation of Kubernetes manifests ==="
-        echo "This step validates YAML and basic structure without contacting a cluster."
+        echo "This step validates YAML syntax and basic Kubernetes fields without contacting a cluster."
         echo ""
-
-        # Ensure kubectl does not use any default kubeconfig pointing to localhost
-        unset KUBECONFIG || true
-
-        # Create a dummy kubeconfig/context so kubectl can run client-side only
-        kubectl config set-cluster dummy --server=https://example.invalid --insecure-skip-tls-verify=true >/dev/null 2>&1
-        kubectl config set-context dummy --cluster=dummy >/dev/null 2>&1
-        kubectl config use-context dummy >/dev/null 2>&1
 
         if [ ! -d "SmartGrid_Project_Devops/kubernetes" ]; then
           echo "❌ Error: Kubernetes directory not found"
@@ -267,14 +265,36 @@ jobs:
         validate_file() {
           local f="$1"
           if [ -f "$f" ]; then
-            # Skip non-Kubernetes YAMLs (no apiVersion field)
-            if ! grep -q "apiVersion:" "$f"; then
-              echo "Skipping (no apiVersion): $f"
-              return
-            fi
             echo "Validating: $f"
-            # Show kubectl output so real manifest errors are visible
-            if ! kubectl apply --dry-run=client --validate=false -f "$f"; then
+            python - "$f" << 'EOF'
+import sys, yaml, os
+
+path = sys.argv[1]
+try:
+    with open(path, "r", encoding="utf-8") as fh:
+        docs = list(yaml.safe_load_all(fh))
+except Exception as e:
+    print(f"YAML parse error in {path}: {e}")
+    sys.exit(1)
+
+if not docs:
+    print(f"{path}: empty YAML document")
+    sys.exit(1)
+
+for i, doc in enumerate(docs, 1):
+    if not isinstance(doc, dict):
+        print(f"{path}: document {i} is not a mapping (got {type(doc).__name__})")
+        sys.exit(1)
+    # Skip non-Kubernetes config snippets if they clearly lack these fields
+    required = ("apiVersion", "kind", "metadata")
+    missing = [k for k in required if k not in doc]
+    if missing:
+        print(f"{path}: document {i} missing required field(s): {', '.join(missing)}")
+        sys.exit(1)
+
+sys.exit(0)
+EOF
+            if [ $? -ne 0 ]; then
               echo "  ❌ Validation failed for: $f"
               VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
             else
@@ -305,7 +325,7 @@ jobs:
         fi
 
         echo ""
-        echo "✅ All manifest files passed client-side validation."
+        echo "✅ All manifest files passed YAML + basic structure validation."
 
     - name: Check KUBECONFIG availability
       id: check_kubeconfig
@@ -377,6 +397,13 @@ jobs:
         
         echo ""
         echo "✅ Deployment verification completed"
+    
+    - name: Skip deployment (no KUBECONFIG)
+      if: steps.check_kubeconfig.outputs.available == 'false'
+      run: |
+        echo "=== Skipping Kubernetes Deployment ==="
+        echo "KUBECONFIG secret is not set. Skipping Kubernetes deployment."
+        echo "✅ Manifest validation passed. Deployment would proceed if KUBECONFIG was available."
     
     - name: Skip deployment (no KUBECONFIG)
       if: steps.check_kubeconfig.outputs.available == 'false'
