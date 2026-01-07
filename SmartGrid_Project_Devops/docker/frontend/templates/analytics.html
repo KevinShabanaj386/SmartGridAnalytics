@@ -6,7 +6,7 @@
     <meta name="description" content="Advanced Analytics - Smart Grid Analytics">
     <title>Analiza - Smart Grid Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/static/modern-style.css">
+    <link rel="stylesheet" href="/static/modern-style.css?v=2.0">
     <style>
         .analytics-controls {
             background: rgba(255, 255, 255, 0.95);
@@ -226,15 +226,24 @@
                     return;
                 }
                 
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    console.error('Error loading forecast:', errorData.error || `HTTP ${response.status}`);
+                    alert('❌ Gabim: ' + (errorData.error || 'Failed to fetch forecast'));
+                    return;
+                }
+                
                 const data = await response.json();
                 
-                if (data.status === 'success') {
+                if (data.status === 'success' && data.forecast && data.forecast.length > 0) {
                     updateForecastChart(data.forecast, data.model);
                 } else {
-                    console.error('Error loading forecast:', data.error);
+                    console.error('Error loading forecast:', data.error || 'No forecast data');
+                    alert('❌ Gabim: ' + (data.error || 'No forecast data available'));
                 }
             } catch (error) {
                 console.error('Error loading forecast:', error);
+                alert('❌ Gabim: Failed to load forecast. Please try again.');
             }
         }
         

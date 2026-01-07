@@ -29,11 +29,13 @@ def prepare_features(df: pd.DataFrame) -> Tuple[pd.DataFrame, StandardScaler]:
     # Krijo features
     features = pd.DataFrame()
     
-    # Features numerike
+    # Features numerike - konverto në float
     if 'value' in df.columns:
-        features['electricity'] = df['value'].fillna(0)
-    if 'reading' in df.columns:
-        features['electricity'] = df['reading'].fillna(0)
+        features['electricity'] = pd.to_numeric(df['value'], errors='coerce').fillna(0).astype(float)
+    elif 'reading' in df.columns:
+        features['electricity'] = pd.to_numeric(df['reading'], errors='coerce').fillna(0).astype(float)
+    else:
+        features['electricity'] = 0
     
     # Water consumption (nëse ekziston)
     if 'water' in df.columns:
@@ -52,17 +54,25 @@ def prepare_features(df: pd.DataFrame) -> Tuple[pd.DataFrame, StandardScaler]:
         features['day_of_week'] = datetime.now().weekday()
         features['month'] = datetime.now().month
     
-    # Location features (nëse ekzistojnë)
+    # Location features (nëse ekzistojnë) - konverto në float
     if 'latitude' in df.columns and 'longitude' in df.columns:
-        features['latitude'] = df['latitude'].fillna(0)
-        features['longitude'] = df['longitude'].fillna(0)
+        features['latitude'] = pd.to_numeric(df['latitude'], errors='coerce').fillna(0).astype(float)
+        features['longitude'] = pd.to_numeric(df['longitude'], errors='coerce').fillna(0).astype(float)
     else:
-        features['latitude'] = 0
-        features['longitude'] = 0
+        features['latitude'] = 0.0
+        features['longitude'] = 0.0
     
-    # Normalize features
+    # Normalize features - sigurohu që të gjitha kolonat janë float
     scaler = StandardScaler()
     feature_columns = ['electricity', 'water', 'hour_of_day', 'day_of_week', 'month', 'latitude', 'longitude']
+    
+    # Konverto të gjitha kolonat në float
+    for col in feature_columns:
+        if col in features.columns:
+            features[col] = pd.to_numeric(features[col], errors='coerce').fillna(0).astype(float)
+        else:
+            features[col] = 0.0
+    
     features_scaled = scaler.fit_transform(features[feature_columns])
     
     return pd.DataFrame(features_scaled, columns=feature_columns), scaler
@@ -151,6 +161,12 @@ def detect_anomalies_with_rf(
     if not os.path.exists(model_path):
         logger.warning(f"Model not found at {model_path}, using default threshold")
         # Fallback në metodën e thjeshtë
+        # Sigurohu që 'value' është float
+        if 'value' in data.columns:
+            data['value'] = pd.to_numeric(data['value'], errors='coerce').fillna(0).astype(float)
+        else:
+            data['value'] = 0.0
+        
         data['is_anomaly'] = data['value'] > data['value'].quantile(0.99)
         data['anomaly_probability'] = 0.5
         data['anomaly_type'] = 'high_consumption'

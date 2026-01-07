@@ -158,9 +158,14 @@ def ingest_sensor():
     """Dërgon të dhëna sensor"""
     try:
         headers = {'Content-Type': 'application/json'}
-        token = user_token or session.get('token')
-        if token:
-            headers['Authorization'] = f'Bearer {token}'
+        # Get token from request header (sent by browser) or session
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            headers['Authorization'] = auth_header
+        else:
+            token = user_token or session.get('token')
+            if token:
+                headers['Authorization'] = f'Bearer {token}'
         
         data = request.get_json()
         response = requests.post(
@@ -170,8 +175,9 @@ def ingest_sensor():
         )
         
         if response.status_code == 201:
-            return jsonify(response.json())
+            return jsonify(response.json()), 201
         else:
+            logger.error(f"Failed to ingest data: {response.status_code} - {response.text}")
             return jsonify({'error': 'Failed to ingest data'}), response.status_code
             
     except Exception as e:

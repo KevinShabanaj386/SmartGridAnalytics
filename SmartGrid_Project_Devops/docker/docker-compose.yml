@@ -295,6 +295,7 @@ services:
       - ANALYTICS_SERVICE=http://smartgrid-analytics:5002
       - NOTIFICATION_SERVICE=http://smartgrid-notification:5003
       - USER_MANAGEMENT_SERVICE=http://smartgrid-user-management:5004
+      - USE_CONSUL=false
     depends_on:
       - data-ingestion-service
       - analytics-service
