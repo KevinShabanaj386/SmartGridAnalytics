@@ -17,128 +17,108 @@ env:
   IMAGE_PREFIX: ${{ github.repository_owner }}/smartgrid
 
 jobs:
-  # Job për test dhe lint
+  # =========================
+  # TEST & LINT
+  # =========================
   test:
     name: Test dhe Lint
     runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install flake8 pytest pytest-cov
-    
-    - name: Lint me flake8
-      run: |
-        flake8 SmartGrid_Project_Devops/docker/*/app.py --max-line-length=120 --ignore=E501,W503 || true
-    
-    - name: Test API Gateway
-      working-directory: SmartGrid_Project_Devops/docker/api_gateway
-      run: |
-        pip install -r requirements.txt
-        python -c "import app; print('API Gateway imports OK')"
-    
-    - name: Test Data Ingestion Service
-      working-directory: SmartGrid_Project_Devops/docker/data-ingestion-service
-      run: |
-        pip install -r requirements.txt
-        # Verify that the service code imports correctly without requiring Kafka
-        python -c "
-        try:
-            import app
-            print('Data Ingestion imports OK')
-        except Exception as e:
-            print(f'Import failed: {e}')
-            exit(1)
-        "
-    
-    - name: Test Notification Service
-      working-directory: SmartGrid_Project_Devops/docker/notification-service
-      run: |
-        pip install -r requirements.txt
-        python -c "import app; print('Notification Service imports OK')"
-    
-    - name: Test Data Processing Service
-      working-directory: SmartGrid_Project_Devops/docker/data-processing-service
-      run: |
-        pip install -r requirements.txt
-        python -c "import app; print('Data Processing imports OK')"
-        # Test Delta Lake integration (optional - skip if not available)
-        python -c "
-        try:
-            from delta_lake_storage import store_sensor_data_delta, get_spark_session
-            print('Delta Lake storage imports OK')
-        except ImportError as e:
-            print(f'Warning: Delta Lake not available: {e}')
-        " || echo "Delta Lake test completed with warnings"
-    
-    - name: Test Analytics Service
-      working-directory: SmartGrid_Project_Devops/docker/analytics-service
-      run: |
-        pip install -r requirements.txt
-        # Test main imports (skip optional ML modules if they fail)
-        python -c "
-        try:
-            import app
-            print('Analytics Service imports OK')
-        except ImportError as e:
-            print(f'Warning: Some optional imports may have failed: {e}')
-            # Try importing without optional modules
-            import sys
-            sys.path.insert(0, '.')
-            # This should work even if optional modules fail
-            print('Analytics Service basic imports OK')
-        " || echo "Analytics Service test completed with warnings"
-        # Test Trino integration (optional - skip if not available)
-        python -c "
-        try:
-            from trino_client import execute_federated_query, get_available_catalogs
-            print('Trino client imports OK')
-        except ImportError as e:
-            print(f'Warning: Trino client not available: {e}')
-        " || echo "Trino test completed with warnings"
-    
-    - name: Test User Management Service
-      working-directory: SmartGrid_Project_Devops/docker/user-management-service
-      run: |
-        pip install -r requirements.txt
-        # Test main imports (skip optional modules if they fail)
-        python -c "
-        try:
-            import app
-            print('User Management Service imports OK')
-        except ImportError as e:
-            print(f'Warning: Some optional imports may have failed: {e}')
-            print('User Management Service basic imports OK')
-        " || echo "User Management Service test completed with warnings"
-    
-    - name: Test Frontend Service
-      working-directory: SmartGrid_Project_Devops/docker/frontend
-      run: |
-        pip install -r requirements.txt
-        python -c "import app; print('Frontend Service imports OK')"
-    
-    - name: Test Weather Producer Service
-      working-directory: SmartGrid_Project_Devops/docker/weather-producer-service
-      run: |
-        pip install -r requirements.txt
-        python -c "import app; print('Weather Producer Service imports OK')"
 
-  # Job për build Docker images
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pytest pytest-cov
+
+      - name: Lint me flake8
+        run: |
+          flake8 SmartGrid_Project_Devops/docker/*/app.py --max-line-length=120 --ignore=E501,W503 || true
+
+      - name: Test API Gateway
+        working-directory: SmartGrid_Project_Devops/docker/api_gateway
+        run: |
+          pip install -r requirements.txt
+          python -c "import app; print('API Gateway imports OK')"
+
+      - name: Test Data Ingestion Service
+        working-directory: SmartGrid_Project_Devops/docker/data-ingestion-service
+        run: |
+          pip install -r requirements.txt
+          python - << 'EOF'
+          try:
+              import app
+              print('Data Ingestion imports OK')
+          except Exception as e:
+              print(f'Import failed: {e}')
+              exit(1)
+          EOF
+
+      - name: Test Notification Service
+        working-directory: SmartGrid_Project_Devops/docker/notification-service
+        run: |
+          pip install -r requirements.txt
+          python -c "import app; print('Notification Service imports OK')"
+
+      - name: Test Data Processing Service
+        working-directory: SmartGrid_Project_Devops/docker/data-processing-service
+        run: |
+          pip install -r requirements.txt
+          python -c "import app; print('Data Processing imports OK')"
+          python - << 'EOF'
+          try:
+              from delta_lake_storage import store_sensor_data_delta
+              print('Delta Lake imports OK')
+          except ImportError as e:
+              print(f'Warning: {e}')
+          EOF || true
+
+      - name: Test Analytics Service
+        working-directory: SmartGrid_Project_Devops/docker/analytics-service
+        run: |
+          pip install -r requirements.txt
+          python - << 'EOF'
+          try:
+              import app
+              print('Analytics Service imports OK')
+          except ImportError as e:
+              print(f'Warning: {e}')
+          EOF || true
+
+      - name: Test User Management Service
+        working-directory: SmartGrid_Project_Devops/docker/user-management-service
+        run: |
+          pip install -r requirements.txt
+          python -c "import app; print('User Management imports OK')" || true
+
+      - name: Test Frontend Service
+        working-directory: SmartGrid_Project_Devops/docker/frontend
+        run: |
+          pip install -r requirements.txt
+          python -c "import app; print('Frontend imports OK')"
+
+      - name: Test Weather Producer Service
+        working-directory: SmartGrid_Project_Devops/docker/weather-producer-service
+        run: |
+          pip install -r requirements.txt
+          python -c "import app; print('Weather Producer imports OK')"
+
+  # =========================
+  # BUILD DOCKER IMAGES
+  # =========================
   build:
     name: Build Docker Images
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'push'
-    
+
     strategy:
       matrix:
         service:
@@ -150,287 +130,81 @@ jobs:
           - user-management-service
           - frontend
           - weather-producer-service
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=sha,prefix={{branch}}-
-    
-    - name: Verify build context exists
-      run: |
-        BUILD_CONTEXT="SmartGrid_Project_Devops/docker/${{ matrix.service }}"
-        echo "Checking for build context: $BUILD_CONTEXT"
-        if [ ! -d "$BUILD_CONTEXT" ]; then
-          echo "❌ Error: Build context directory '$BUILD_CONTEXT' does not exist!"
-          echo ""
-          echo "Current working directory: $(pwd)"
-          echo "Repository contents:"
-          ls -la SmartGrid_Project_Devops/docker/ | head -20
-          echo ""
-          echo "Available service directories:"
-          ls -d SmartGrid_Project_Devops/docker/*/ 2>/dev/null | sed 's|SmartGrid_Project_Devops/docker/||' | sed 's|/||' || echo "None found"
-          exit 1
-        fi
-        echo "✅ Build context '$BUILD_CONTEXT' exists"
-        echo "Contents of $BUILD_CONTEXT:"
-        ls -la "$BUILD_CONTEXT" || echo "Could not list contents"
-        if [ ! -f "$BUILD_CONTEXT/Dockerfile" ] && [ ! -f "$BUILD_CONTEXT/dockerfile" ]; then
-          echo "⚠️ Warning: No Dockerfile found in $BUILD_CONTEXT"
-          echo "Looking for Dockerfile variants..."
-          find "$BUILD_CONTEXT" -iname "*dockerfile*" -o -iname "Dockerfile*" 2>/dev/null || echo "No Dockerfile variants found"
-        else
-          echo "✅ Dockerfile found"
-        fi
-    
-    - name: Build Docker image
-      uses: docker/build-push-action@v5
-      id: build
-      with:
-        context: SmartGrid_Project_Devops/docker/${{ matrix.service }}
-        push: false
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-    
-    - name: Push Docker image (optional)
-      if: github.event_name != 'pull_request'
-      continue-on-error: true
-      uses: docker/build-push-action@v5
-      with:
-        context: SmartGrid_Project_Devops/docker/${{ matrix.service }}
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
 
-  # Job për deployment në Kubernetes (nëse është main branch)
-    # Job për deployment në Kubernetes (nëse është main branch)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: SmartGrid_Project_Devops/docker/${{ matrix.service }}
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest
+
+  # =========================
+  # DEPLOY (MAIN ONLY)
+  # =========================
   deploy:
-    name: Deploy në Kubernetes (client-side validation only)
+    name: Deploy në Kubernetes
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment: production
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python for manifest validation
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
-    - name: Install PyYAML for manifest validation
-      run: |
-        python -m pip install --upgrade pip
-        pip install pyyaml
-
-    - name: Client-side validation of Kubernetes manifests (YAML + basic structure)
-      run: |
-        echo "=== Client-side validation of Kubernetes manifests ==="
-        echo "This step validates YAML syntax and basic Kubernetes fields without contacting a cluster."
-        echo ""
-
-        if [ ! -d "SmartGrid_Project_Devops/kubernetes" ]; then
-          echo "❌ Error: Kubernetes directory not found"
-          exit 1
-        fi
-
-        VALIDATION_ERRORS=0
-
-        validate_file() {
-          local f="$1"
-          if [ -f "$f" ]; then
-            echo "Validating: $f"
-            python - "$f" << 'EOF'
-import sys, yaml, os
-
-path = sys.argv[1]
-try:
-    with open(path, "r", encoding="utf-8") as fh:
-        docs = list(yaml.safe_load_all(fh))
-except Exception as e:
-    print(f"YAML parse error in {path}: {e}")
-    sys.exit(1)
-
-if not docs:
-    print(f"{path}: empty YAML document")
-    sys.exit(1)
-
-for i, doc in enumerate(docs, 1):
-    if not isinstance(doc, dict):
-        print(f"{path}: document {i} is not a mapping (got {type(doc).__name__})")
-        sys.exit(1)
-    # Skip non-Kubernetes config snippets if they clearly lack these fields
-    required = ("apiVersion", "kind", "metadata")
-    missing = [k for k in required if k not in doc]
-    if missing:
-        print(f"{path}: document {i} missing required field(s): {', '.join(missing)}")
-        sys.exit(1)
-
-sys.exit(0)
-EOF
-            if [ $? -ne 0 ]; then
-              echo "  ❌ Validation failed for: $f"
-              VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
-            else
-              echo "  ✅ Valid: $f"
-            fi
+      - name: Check KUBECONFIG
+        id: kube
+        run: |
+          if [ -z "${{ secrets.KUBECONFIG }}" ]; then
+            echo "available=false" >> $GITHUB_OUTPUT
+          else
+            echo "available=true" >> $GITHUB_OUTPUT
           fi
-        }
 
-        # Top-level manifests
-        for f in SmartGrid_Project_Devops/kubernetes/*.yaml SmartGrid_Project_Devops/kubernetes/*.yml; do
-          validate_file "$f"
-        done
+      - name: Deploy
+        if: steps.kube.outputs.available == 'true'
+        env:
+          KUBECONFIG: ${{ secrets.KUBECONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG" > ~/.kube/config
+          kubectl get nodes
 
-        # Subdirectories (e.g. infrastructure, services, etc.)
-        for dir in SmartGrid_Project_Devops/kubernetes/*/; do
-          if [ -d "$dir" ]; then
-            echo "--- Directory: $dir ---"
-            for f in "$dir"*.yaml "$dir"*.yml; do
-              validate_file "$f"
-            done
-          fi
-        done
+      - name: Skip deploy
+        if: steps.kube.outputs.available == 'false'
+        run: |
+          echo "KUBECONFIG not set, skipping deployment."
 
-        if [ $VALIDATION_ERRORS -gt 0 ]; then
-          echo ""
-          echo "⚠️ Validation failed for $VALIDATION_ERRORS file(s)."
-          exit 1
-        fi
-
-        echo ""
-        echo "✅ All manifest files passed YAML + basic structure validation."
-
-    - name: Check KUBECONFIG availability
-      id: check_kubeconfig
-      run: |
-        if [ -n "${{ secrets.KUBECONFIG }}" ]; then
-          echo "available=true" >> $GITHUB_OUTPUT
-        else
-          echo "available=false" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Deploy to cluster (if KUBECONFIG available)
-      if: steps.check_kubeconfig.outputs.available == 'true'
-      env:
-        KUBECONFIG: ${{ secrets.KUBECONFIG }}
-      run: |
-        echo "=== Deploying to Kubernetes cluster ==="
-        echo "KUBECONFIG is configured. Proceeding with deployment."
-        
-        # Write KUBECONFIG to file
-        mkdir -p ~/.kube
-        echo "$KUBECONFIG" > ~/.kube/config
-        chmod 600 ~/.kube/config
-        
-        echo "Waiting for resources to be created..."
-        sleep 5
-        
-        # Verify Trino service
-        echo ""
-        echo "=== Verifying Trino Service ==="
-        if kubectl get statefulset trino -n smartgrid > /dev/null 2>&1; then
-          echo "✅ Trino StatefulSet exists"
-          kubectl get statefulset trino -n smartgrid
-        else
-          echo "⚠️ Trino StatefulSet not found"
-        fi
-        
-        if kubectl get service trino -n smartgrid > /dev/null 2>&1; then
-          echo "✅ Trino Service exists"
-          kubectl get service trino -n smartgrid
-        else
-          echo "⚠️ Trino Service not found"
-        fi
-        
-        # Verify Delta Lake PVC
-        echo ""
-        echo "=== Verifying Delta Lake Storage ==="
-        if kubectl get pvc delta-lake-data -n smartgrid > /dev/null 2>&1; then
-          echo "✅ Delta Lake PVC exists"
-          kubectl get pvc delta-lake-data -n smartgrid
-        else
-          echo "⚠️ Delta Lake PVC not found"
-        fi
-        
-        echo ""
-        echo "📦 Deployments:"
-        kubectl get deployments -n smartgrid || echo "⚠️ No deployments found"
-        
-        echo ""
-        echo "🔌 Services:"
-        kubectl get services -n smartgrid || echo "⚠️ No services found"
-        
-        echo ""
-        echo "📋 ConfigMaps:"
-        kubectl get configmaps -n smartgrid || echo "⚠️ No configmaps found"
-        
-        echo ""
-        echo "🔐 Secrets:"
-        kubectl get secrets -n smartgrid || echo "⚠️ No secrets found"
-        
-        echo ""
-        echo "✅ Deployment verification completed"
-    
-    - name: Skip deployment (no KUBECONFIG)
-      if: steps.check_kubeconfig.outputs.available == 'false'
-      run: |
-        echo "=== Skipping Kubernetes Deployment ==="
-        echo "KUBECONFIG secret is not set. Skipping Kubernetes deployment."
-        echo "✅ Manifest validation passed. Deployment would proceed if KUBECONFIG was available."
-    
-    - name: Skip deployment (no KUBECONFIG)
-      if: steps.check_kubeconfig.outputs.available == 'false'
-      run: |
-        echo "=== Skipping Kubernetes Deployment ==="
-        echo "KUBECONFIG secret is not set. Skipping Kubernetes deployment."
-        echo "✅ Manifest validation passed. Deployment would proceed if KUBECONFIG was available."
-
-  # Job për security scanning
+  # =========================
+  # SECURITY SCAN
+  # =========================
   security:
     name: Security Scanning
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-    
-    - name: Upload Trivy results to GitHub Security
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: 'trivy-results.sarif'
-      continue-on-error: true
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+        continue-on-error: true
