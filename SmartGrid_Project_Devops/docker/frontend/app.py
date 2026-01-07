@@ -8,7 +8,16 @@ import os
 import logging
 from datetime import datetime, timedelta
 
-app = Flask(__name__, static_folder='static', template_folder='templates')
+app = Flask(__name__, 
+            static_folder='static', 
+            static_url_path='/static',
+            template_folder='templates')
+
+# Ensure static files are served correctly
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    """Serve static files"""
+    return send_from_directory(app.static_folder, filename)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 logging.basicConfig(level=logging.INFO)
