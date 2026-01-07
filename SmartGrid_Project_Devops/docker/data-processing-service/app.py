@@ -253,6 +253,22 @@ def create_tables():
 
 def process_sensor_data(event: Dict[str, Any], retry_count: int = 0):
     """Përpunon të dhënat e sensorit dhe i ruan në bazën e të dhënave"""
+    # Use resilience patterns
+    try:
+        from resilience import retry_with_backoff, fallback, db_circuit_breaker
+        
+        @retry_with_backoff(max_retries=3, initial_delay=1.0)
+        @fallback(default_value=None)
+        def _process_with_resilience():
+            return _process_sensor_data_internal(event, retry_count)
+        
+        return db_circuit_breaker.call(_process_with_resilience)
+    except ImportError:
+        # Fallback nëse resilience module nuk është i disponueshëm
+        return _process_sensor_data_internal(event, retry_count)
+
+def _process_sensor_data_internal(event: Dict[str, Any], retry_count: int = 0):
+    """Internal implementation për process_sensor_data"""
     conn = db_pool.getconn()
     try:
         cursor = conn.cursor()
@@ -330,6 +346,22 @@ def process_sensor_data(event: Dict[str, Any], retry_count: int = 0):
 
 def process_meter_reading(event: Dict[str, Any]):
     """Përpunon leximin e matësit dhe e ruan në bazën e të dhënave"""
+    # Use resilience patterns
+    try:
+        from resilience import retry_with_backoff, fallback, db_circuit_breaker
+        
+        @retry_with_backoff(max_retries=3, initial_delay=1.0)
+        @fallback(default_value=None)
+        def _process_with_resilience():
+            return _process_meter_reading_internal(event)
+        
+        return db_circuit_breaker.call(_process_with_resilience)
+    except ImportError:
+        # Fallback nëse resilience module nuk është i disponueshëm
+        return _process_meter_reading_internal(event)
+
+def _process_meter_reading_internal(event: Dict[str, Any]):
+    """Internal implementation për process_meter_reading"""
     conn = db_pool.getconn()
     try:
         cursor = conn.cursor()

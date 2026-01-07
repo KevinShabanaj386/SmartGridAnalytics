@@ -1,0 +1,109 @@
+# PostgreSQL Database për Analytics Service (Database-per-Service Pattern)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: analytics-db-pvc
+  namespace: smartgrid
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: analytics-postgres
+  namespace: smartgrid
+spec:
+  serviceName: analytics-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analytics-postgres
+  template:
+    metadata:
+      labels:
+        app: analytics-postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgis/postgis:15-3.4
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: analytics-db-secret
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: analytics-db-secret
+              key: password
+        - name: POSTGRES_DB
+          value: analytics_db
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: analytics-db-data
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - smartgrid
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - smartgrid
+          initialDelaySeconds: 10
+          periodSeconds: 5
+  volumeClaimTemplates:
+  - metadata:
+      name: analytics-db-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 20Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-postgres
+  namespace: smartgrid
+spec:
+  clusterIP: None
+  selector:
+    app: analytics-postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: analytics-db-secret
+  namespace: smartgrid
+type: Opaque
+stringData:
+  username: smartgrid
+  password: smartgrid123
+
