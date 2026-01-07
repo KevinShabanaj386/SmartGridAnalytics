@@ -10,8 +10,8 @@ COPY catalog/kafka.properties /etc/trino/catalog/kafka.properties
 # Create directories
 RUN mkdir -p /etc/trino/catalog
 
-# Set permissions
-RUN chmod -R 755 /etc/trino
+# Set permissions (best-effort; ignore permission errors on base image files)
+RUN chmod -R 755 /etc/trino || echo "Warning: could not change some Trino config permissions"
 
 EXPOSE 8080
 

@@ -363,7 +363,7 @@ services:
     build: ./frontend
     container_name: smartgrid-frontend
     ports:
-      - "8080:8080"
+      - "8081:8080"  # host:container (changed host port from 8080 to 8081 to avoid conflicts)
     environment:
       - API_GATEWAY_URL=http://smartgrid-api-gateway:5000
       - SECRET_KEY=dev-secret-key-change-in-production
