@@ -269,7 +269,7 @@ services:
       - KAFKA_TOPIC_SENSOR_DATA=smartgrid-sensor-data
       - KAFKA_TOPIC_METER_READINGS=smartgrid-meter-readings
       - KAFKA_GROUP_ID=data-processing-service-group
-      - POSTGRES_HOST=smartgrid-postgres
+      - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_DB=smartgrid_db
       - POSTGRES_USER=smartgrid
@@ -285,7 +285,7 @@ services:
     ports:
       - "5002:5002"
     environment:
-      - POSTGRES_HOST=smartgrid-postgres
+      - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_DB=smartgrid_db
       - POSTGRES_USER=smartgrid
@@ -322,7 +322,7 @@ services:
     ports:
       - "5004:5004"
     environment:
-      - POSTGRES_HOST=smartgrid-postgres
+      - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_DB=smartgrid_db
       - POSTGRES_USER=smartgrid

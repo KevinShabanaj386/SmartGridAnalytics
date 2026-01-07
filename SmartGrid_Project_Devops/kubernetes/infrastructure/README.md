@@ -14,6 +14,8 @@ Këto manifests deployojnë infrastructure services në Kubernetes për producti
 | Redis | `redis-statefulset.yaml` | 10Gi | Caching |
 | Consul | `consul-statefulset.yaml` | 5Gi | Service discovery |
 | Vault | `vault-statefulset.yaml` | 5Gi | Secrets management |
+| Trino | `trino-statefulset.yaml` | - | Federated query engine |
+| Delta Lake | `delta-lake-pvc.yaml` | 50Gi | Data lakehouse storage |
 
 ## Deployment
 
@@ -40,6 +42,12 @@ kubectl apply -f consul-statefulset.yaml -n smartgrid
 
 # Vault
 kubectl apply -f vault-statefulset.yaml -n smartgrid
+
+# Trino (Federated Query Engine)
+kubectl apply -f trino-statefulset.yaml -n smartgrid
+
+# Delta Lake (Data Lakehouse Storage)
+kubectl apply -f delta-lake-pvc.yaml -n smartgrid
 ```
 
 ## Verifikimi
@@ -52,7 +60,10 @@ kubectl get statefulsets -n smartgrid
 kubectl get services -n smartgrid | grep -E "postgres|kafka|redis|consul|vault"
 
 # Shiko Pods
-kubectl get pods -n smartgrid | grep -E "postgres|kafka|zookeeper|redis|consul|vault"
+kubectl get pods -n smartgrid | grep -E "postgres|kafka|zookeeper|redis|consul|vault|trino"
+
+# Shiko PVCs (Delta Lake)
+kubectl get pvc -n smartgrid | grep delta-lake
 ```
 
 ## Kërkesat

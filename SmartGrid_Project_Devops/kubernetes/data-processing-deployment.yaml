@@ -69,6 +69,11 @@ spec:
             secretKeyRef:
               name: smartgrid-secrets
               key: POSTGRES_PASSWORD
+        - name: DELTA_LAKE_BASE_PATH
+          value: "/data/delta-lake"
+        volumeMounts:
+        - name: delta-lake-data
+          mountPath: /data/delta-lake
         resources:
           requests:
             memory: "256Mi"
@@ -76,6 +81,10 @@ spec:
           limits:
             memory: "1Gi"
             cpu: "1000m"
+      volumes:
+      - name: delta-lake-data
+        persistentVolumeClaim:
+          claimName: delta-lake-data
 ---
 apiVersion: v1
 kind: Service

@@ -129,5 +129,34 @@ echo ""
 echo "📋 ConfigMaps:"
 $KUBECTL_CMD get configmaps -n "$NAMESPACE" || echo "  (none found)"
 echo ""
+echo "🔍 StatefulSets (Infrastructure):"
+$KUBECTL_CMD get statefulsets -n "$NAMESPACE" || echo "  (none found)"
+echo ""
+echo "💾 PersistentVolumeClaims:"
+$KUBECTL_CMD get pvc -n "$NAMESPACE" || echo "  (none found)"
+echo ""
+echo "=== Verifying Trino and Delta Lake ==="
+echo ""
+if $KUBECTL_CMD get statefulset trino -n "$NAMESPACE" > /dev/null 2>&1; then
+    echo "✅ Trino StatefulSet deployed"
+    $KUBECTL_CMD get statefulset trino -n "$NAMESPACE"
+else
+    echo "⚠️ Trino StatefulSet not found"
+fi
+echo ""
+if $KUBECTL_CMD get service trino -n "$NAMESPACE" > /dev/null 2>&1; then
+    echo "✅ Trino Service deployed"
+    $KUBECTL_CMD get service trino -n "$NAMESPACE"
+else
+    echo "⚠️ Trino Service not found"
+fi
+echo ""
+if $KUBECTL_CMD get pvc delta-lake-data -n "$NAMESPACE" > /dev/null 2>&1; then
+    echo "✅ Delta Lake PVC deployed"
+    $KUBECTL_CMD get pvc delta-lake-data -n "$NAMESPACE"
+else
+    echo "⚠️ Delta Lake PVC not found"
+fi
+echo ""
 echo "✅ Verification completed"
 

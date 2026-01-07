@@ -88,6 +88,25 @@ except Exception as e:
     logger.warning(f"Could not load PostGIS utilities: {e}")
     POSTGIS_AVAILABLE = False
 
+# Initialize Trino Federated Query Engine (100% FEDERATED QUERY ENGINE)
+try:
+    from trino_client import (
+        execute_federated_query,
+        query_postgresql,
+        query_mongodb,
+        query_cassandra,
+        query_kafka,
+        cross_platform_join,
+        get_available_catalogs,
+        get_available_schemas,
+        get_available_tables
+    )
+    TRINO_AVAILABLE = True
+    logger.info("Trino federated query engine available")
+except ImportError:
+    TRINO_AVAILABLE = False
+    logger.warning("Trino client not available, federated queries disabled")
+
 def get_db_connection():
     """Krijon një lidhje me bazën e të dhënave"""
     conn = psycopg2.connect(**DB_CONFIG)
@@ -1065,6 +1084,106 @@ def fp_growth_rules():
         
     except Exception as e:
         logger.error(f"Error in FP-Growth algorithm: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+# Trino Federated Query Engine Endpoints (100% FEDERATED QUERY ENGINE)
+@app.route('/api/v1/analytics/federated/query', methods=['POST'])
+def execute_federated_query_endpoint():
+    """
+    Ekzekuton federated SQL query mbi burime të ndryshme.
+    Body: { "query": "SELECT * FROM postgresql.public.sensor_data LIMIT 100" }
+    """
+    if not TRINO_AVAILABLE:
+        return jsonify({'error': 'Trino federated query engine not available'}), 503
+    
+    try:
+        data = request.get_json()
+        query = data.get('query')
+        
+        if not query:
+            return jsonify({'error': 'Query is required'}), 400
+        
+        # SECURITY: Basic validation - vetëm SELECT queries (në prodhim, duhet më strict)
+        if not query.strip().upper().startswith('SELECT'):
+            return jsonify({'error': 'Only SELECT queries are allowed'}), 400
+        
+        results = execute_federated_query(query)
+        return jsonify({
+            'results': results,
+            'count': len(results)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error executing federated query: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/federated/catalogs', methods=['GET'])
+def get_catalogs():
+    """Merr listën e catalogs të disponueshme"""
+    if not TRINO_AVAILABLE:
+        return jsonify({'error': 'Trino federated query engine not available'}), 503
+    
+    try:
+        catalogs = get_available_catalogs()
+        return jsonify({'catalogs': catalogs}), 200
+    except Exception as e:
+        logger.error(f"Error getting catalogs: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/federated/schemas/<catalog>', methods=['GET'])
+def get_schemas(catalog):
+    """Merr listën e schemas për një catalog"""
+    if not TRINO_AVAILABLE:
+        return jsonify({'error': 'Trino federated query engine not available'}), 503
+    
+    try:
+        schemas = get_available_schemas(catalog)
+        return jsonify({'schemas': schemas}), 200
+    except Exception as e:
+        logger.error(f"Error getting schemas: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/federated/tables/<catalog>/<schema>', methods=['GET'])
+def get_tables(catalog, schema):
+    """Merr listën e tables për një catalog dhe schema"""
+    if not TRINO_AVAILABLE:
+        return jsonify({'error': 'Trino federated query engine not available'}), 503
+    
+    try:
+        tables = get_available_tables(catalog, schema)
+        return jsonify({'tables': tables}), 200
+    except Exception as e:
+        logger.error(f"Error getting tables: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/v1/analytics/federated/cross-platform-join', methods=['POST'])
+def cross_platform_join_endpoint():
+    """
+    Ekzekuton cross-platform join query.
+    Body: { "query": "SELECT s.sensor_id, s.value, m.customer_id FROM postgresql.public.sensor_data s JOIN mongodb.smartgrid_audit.audit_logs m ON s.sensor_id = m.sensor_id" }
+    """
+    if not TRINO_AVAILABLE:
+        return jsonify({'error': 'Trino federated query engine not available'}), 503
+    
+    try:
+        data = request.get_json()
+        query = data.get('query')
+        
+        if not query:
+            return jsonify({'error': 'Query is required'}), 400
+        
+        # SECURITY: Basic validation - vetëm SELECT queries
+        if not query.strip().upper().startswith('SELECT'):
+            return jsonify({'error': 'Only SELECT queries are allowed'}), 400
+        
+        results = cross_platform_join(query)
+        return jsonify({
+            'results': results,
+            'count': len(results)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error executing cross-platform join: {str(e)}")
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
 # Consul service registration
