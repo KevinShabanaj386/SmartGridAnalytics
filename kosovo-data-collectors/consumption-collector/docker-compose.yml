@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # Kafka për consumption data streaming
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: kosovo-consumption-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2183:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kosovo-consumption-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9094:9092"
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9094
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  # Kosovo Energy Consumption Collector
+  kosovo-consumption-collector:
+    build: .
+    container_name: kosovo-consumption-collector
+    ports:
+      - "5009:5009"
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - KAFKA_TOPIC_CONSUMPTION=kosovo-energy-consumption
+      - COLLECTION_INTERVAL=3600  # 1 orë
+    depends_on:
+      - kafka
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+
+volumes:
+  kafka_data:

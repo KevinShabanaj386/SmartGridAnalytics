@@ -1,0 +1,6 @@
+flask==3.0.0
+kafka-python==2.0.2
+requests==2.31.0
+beautifulsoup4==4.12.2
+APScheduler==3.10.4
+lxml==4.9.3
