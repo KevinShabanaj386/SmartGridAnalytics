@@ -259,7 +259,7 @@ def collect_all_weather_data() -> List[Dict[str, Any]]:
             producer = get_producer()
             if producer:
                 try:
-                producer.send(
+                    producer.send(
                         KAFKA_TOPIC_WEATHER,
                         key=city_key,  # let key_serializer handle encoding
                         value=weather_data

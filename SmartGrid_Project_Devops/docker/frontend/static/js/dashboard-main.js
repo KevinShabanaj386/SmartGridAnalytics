@@ -110,11 +110,11 @@ async function loadDashboard() {
         console.error('Error loading dashboard:', error);
     }
     
-    // Auto-refresh every 30 seconds
+    // Auto-refresh every 10 seconds for real-time updates
     if (refreshInterval) clearInterval(refreshInterval);
     refreshInterval = setInterval(() => {
         loadDashboard();
-    }, 30000);
+    }, 10000);
 }
 
 // Load statistics
@@ -132,6 +132,19 @@ async function loadStats() {
         const response = await fetch('/api/sensor-stats?hours=24', {
             headers: {'Authorization': `Bearer ${authToken}`}
         });
+        
+        // Check for auth errors
+        if (response.status === 401) {
+            console.error('❌ Authentication failed (401) - token may be expired');
+            showAuthError('Session ka skaduar. Ju lutem hyni përsëri.');
+            return;
+        }
+        
+        if (!response.ok) {
+            console.error(`❌ API error: ${response.status}`);
+            return;
+        }
+        
         const data = await response.json();
         
         if (data.status === 'success' && data.data) {
@@ -143,9 +156,11 @@ async function loadStats() {
             document.getElementById('activeSensors').textContent = totalSensors;
             document.getElementById('avgValue').textContent = avgValue.toFixed(2);
             document.getElementById('totalReadings').textContent = totalReadings.toLocaleString();
+        } else if (data.error) {
+            console.error('❌ API returned error:', data.error);
         }
     } catch (error) {
-        console.error('Error loading stats:', error);
+        console.error('❌ Error loading stats:', error);
     }
 }
 
@@ -399,13 +414,34 @@ async function loadRecentData(limit = 10) {
     try {
         // Refresh token again right before the call
         authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-        const response = await fetch(`/api/sensor-stats?hours=24`, {
-            headers: {'Authorization': `Bearer ${authToken}`}
+        // Add cache-busting timestamp to ensure fresh data
+        const cacheBuster = `&_t=${Date.now()}`;
+        const response = await fetch(`/api/sensor-stats?hours=24${cacheBuster}`, {
+            headers: {'Authorization': `Bearer ${authToken}`},
+            cache: 'no-cache'  // Disable browser cache
         });
+        
+        // Check for auth errors
+        if (response.status === 401) {
+            console.error('❌ Authentication failed (401)');
+            return;
+        }
+        
+        if (!response.ok) {
+            console.error(`❌ API error: ${response.status}`);
+            return;
+        }
+        
         const data = await response.json();
         
-        if (data.status === 'success' && data.data) {
+        if (data.status === 'success' && data.data && data.data.length > 0) {
             updateDataTable(data.data.slice(0, limit));
+        } else {
+            // Show message if no data but API call succeeded
+            const tbody = document.getElementById('dataTableBody');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">Duke pritur të dhëna... (Të dhënat e reja shfaqen pas 30-60 sekondave)</td></tr>';
+            }
         }
     } catch (error) {
         console.error('Error loading recent data:', error);
@@ -450,6 +486,19 @@ function showAlert(containerId, message, type) {
     setTimeout(() => {
         container.innerHTML = '';
     }, 5000);
+}
+
+function showAuthError(message) {
+    // Show auth error at top of page
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-danger';
+    alertDiv.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; z-index: 9999; margin: 0; padding: 1rem; text-align: center; background: #ef4444; color: white; font-weight: bold;';
+    alertDiv.textContent = `⚠️ ${message}`;
+    document.body.insertBefore(alertDiv, document.body.firstChild);
+    
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 10000);
 }
 
 // Cleanup

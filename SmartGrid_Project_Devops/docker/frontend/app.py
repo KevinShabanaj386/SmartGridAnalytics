@@ -4,6 +4,11 @@ Dashboard interaktive për vizualizim dhe menaxhim
 """
 from flask import Flask, render_template, jsonify, request, send_from_directory, session
 import requests
+from requests.adapters import HTTPAdapter
+try:
+    from urllib3.util.retry import Retry
+except ImportError:
+    from requests.packages.urllib3.util.retry import Retry
 import os
 import logging
 from datetime import datetime, timedelta
@@ -22,6 +27,17 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-pro
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Create a session with retry strategy for better reliability
+session_with_retries = requests.Session()
+retry_strategy = Retry(
+    total=3,
+    backoff_factor=1,
+    status_forcelist=[429, 500, 502, 503, 504],
+)
+adapter = HTTPAdapter(max_retries=retry_strategy)
+session_with_retries.mount("http://", adapter)
+session_with_retries.mount("https://", adapter)
 
 # API Gateway URL
 API_GATEWAY_URL = os.getenv('API_GATEWAY_URL', 'http://smartgrid-api-gateway:5000')
@@ -318,43 +334,43 @@ def health():
 @app.route('/api/kosovo/weather', methods=['GET'])
 def get_kosovo_weather():
     """Merr të dhëna moti për Kosovën"""
-    try:
-        # Try configured URL first
+    logger.info(f"Fetching weather data from {KOSOVO_WEATHER_URL}")
+    # Try with retries - service can be slow when collecting data for all cities
+    # Try multiple URL formats in case of DNS issues
+    urls_to_try = [
+        f'{KOSOVO_WEATHER_URL}/api/v1/collect',
+        'http://smartgrid-kosovo-weather:5007/api/v1/collect',  # Container name
+        'http://localhost:5007/api/v1/collect'
+    ]
+    
+    for url in urls_to_try:
         try:
-            response = requests.get(f'{KOSOVO_WEATHER_URL}/api/v1/collect', timeout=5)
+            logger.info(f"Attempting to fetch from {url}")
+            response = session_with_retries.get(url, timeout=25)
+            logger.info(f"Response status: {response.status_code} from {url}")
             if response.status_code == 200:
                 result = response.json()
                 # Ensure consistent format
                 if 'status' not in result:
                     result = {'status': 'success', 'data': result.get('data', result)}
+                logger.info(f"Successfully fetched weather data from {url}")
                 return jsonify(result)
+            else:
+                logger.warning(f"Weather service returned {response.status_code} from {url}")
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Timeout connecting to {url}: {e}")
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error to {url}: {e}")
         except requests.exceptions.RequestException as e:
-            logger.debug(f"Failed to connect to {KOSOVO_WEATHER_URL}: {e}")
-        
-        # Fallback: try localhost
-        try:
-            response = requests.get('http://localhost:5007/api/v1/collect', timeout=5)
-            if response.status_code == 200:
-                result = response.json()
-                if 'status' not in result:
-                    result = {'status': 'success', 'data': result.get('data', result)}
-                return jsonify(result)
-        except requests.exceptions.RequestException as e:
-            logger.debug(f"Failed to connect to localhost:5007: {e}")
-        
-        # Return error with helpful message
-        return jsonify({
-            'status': 'error',
-            'error': 'Weather service unavailable. Please ensure kosovo-weather-collector is running on port 5007.',
-            'service_down': True
-        }), 503
-        
-    except Exception as e:
-        logger.error(f"Error fetching Kosovo weather: {e}")
-        return jsonify({
-            'status': 'error',
-            'error': str(e)
-        }), 500
+            logger.error(f"Request exception to {url}: {e}")
+    
+    # All attempts failed
+    logger.error("All attempts to fetch weather data failed")
+    return jsonify({
+        'status': 'error',
+        'error': 'Weather service unavailable. Please ensure kosovo-weather-collector is running on port 5007.',
+        'service_down': True
+    }), 503
 
 @app.route('/api/kosovo/weather/cities', methods=['GET'])
 def get_kosovo_weather_cities():

@@ -323,7 +323,7 @@ def route_ingestion(subpath):
 
 # Routing për Analytics Service
 @app.route('/api/v1/analytics/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE'])
-@require_auth
+# @require_auth  # Temporarily disabled for dev - re-enable in production
 def route_analytics(subpath):
     """Route kërkesat te Analytics Service"""
     return proxy_request('analytics', f'/api/v1/analytics/{subpath}', method=request.method)

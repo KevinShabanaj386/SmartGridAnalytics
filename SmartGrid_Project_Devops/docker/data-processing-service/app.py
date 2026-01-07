@@ -556,19 +556,29 @@ def consume_sensor_data():
     logger.info(f"Started consuming from topic: {KAFKA_TOPIC_SENSOR_DATA}")
     
     batch = []
-    batch_size = 100
+    batch_size = 10  # Reduced from 100 to 10 for faster processing
+    last_flush_time = datetime.utcnow()
+    flush_interval_seconds = 2  # Flush batch every 2 seconds even if not full
     
     try:
         for message in consumer:
             try:
                 event = message.value
                 batch.append(event)
+                current_time = datetime.utcnow()
                 
-                if len(batch) >= batch_size:
+                # Process batch if it's full OR if enough time has passed
+                should_flush = (
+                    len(batch) >= batch_size or
+                    (len(batch) > 0 and (current_time - last_flush_time).total_seconds() >= flush_interval_seconds)
+                )
+                
+                if should_flush:
                     # Përpunim batch
                     _process_batch(batch, batch_type="sensor")
+                    logger.info(f"Processed batch of {len(batch)} sensor events (time-based or size-based flush)")
                     batch = []
-                    logger.info(f"Processed batch of {batch_size} sensor events")
+                    last_flush_time = current_time
                     
             except Exception as e:
                 logger.error(f"Error processing message: {str(e)}")
