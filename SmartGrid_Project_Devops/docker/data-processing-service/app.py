@@ -285,6 +285,27 @@ def process_sensor_data(event: Dict[str, Any], retry_count: int = 0):
         conn.commit()
         logger.debug(f"Processed sensor data: {event['event_id']}")
         
+        # Shkruaj në Hybrid Storage (PostgreSQL + Cassandra) - 100% HYBRID STORAGE MODELS
+        if HYBRID_STORAGE_AVAILABLE:
+            try:
+                hybrid_storage = get_hybrid_storage()
+                timestamp = datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00'))
+                storage_results = hybrid_storage.store_sensor_data(
+                    sensor_id=event['sensor_id'],
+                    timestamp=timestamp,
+                    sensor_type=event['sensor_type'],
+                    value=float(event['value']),
+                    latitude=lat,
+                    longitude=lon,
+                    metadata=event.get('metadata', {}),
+                    use_cassandra=True,  # Store në Cassandra për time-series
+                    use_postgres=False   # Tashmë u ruajt në PostgreSQL më lart
+                )
+                if storage_results.get('cassandra'):
+                    logger.debug(f"Stored sensor data in Cassandra: {event['sensor_id']}")
+            except Exception as e:
+                logger.warning(f"Error storing in hybrid storage: {e}")
+        
     except Exception as e:
         conn.rollback()
         logger.error(f"Error processing sensor data: {str(e)}")
@@ -329,6 +350,26 @@ def process_meter_reading(event: Dict[str, Any]):
         
         conn.commit()
         logger.debug(f"Processed meter reading: {event['event_id']}")
+        
+        # Shkruaj në Hybrid Storage (PostgreSQL + Cassandra) - 100% HYBRID STORAGE MODELS
+        if HYBRID_STORAGE_AVAILABLE:
+            try:
+                hybrid_storage = get_hybrid_storage()
+                timestamp = datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00'))
+                storage_results = hybrid_storage.store_meter_reading(
+                    meter_id=event['meter_id'],
+                    timestamp=timestamp,
+                    customer_id=event['customer_id'],
+                    reading=float(event['reading']),
+                    unit=event.get('unit', 'kWh'),
+                    metadata={},
+                    use_cassandra=True,  # Store në Cassandra për time-series
+                    use_postgres=False   # Tashmë u ruajt në PostgreSQL më lart
+                )
+                if storage_results.get('cassandra'):
+                    logger.debug(f"Stored meter reading in Cassandra: {event['meter_id']}")
+            except Exception as e:
+                logger.warning(f"Error storing in hybrid storage: {e}")
         
     except Exception as e:
         conn.rollback()
