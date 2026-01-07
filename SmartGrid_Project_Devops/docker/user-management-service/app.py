@@ -51,14 +51,31 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Vault Secrets Management
+try:
+    from vault_client import get_jwt_secret, get_database_credentials
+    VAULT_AVAILABLE = True
+    logger.info("Vault client available")
+except ImportError:
+    VAULT_AVAILABLE = False
+    logger.warning("Vault client not available, using environment variables")
+    def get_jwt_secret():
+        return os.getenv('JWT_SECRET', 'your-secret-key-change-in-production')
+    def get_database_credentials():
+        return None
+
 # Consul Config Management
 try:
     from consul_config import get_config
-    JWT_SECRET = get_config('jwt/secret', os.getenv('JWT_SECRET', 'your-secret-key-change-in-production'))
+    # Merr JWT secret nga Vault nëse është i disponueshëm, përndryshe nga Consul ose env
+    if VAULT_AVAILABLE:
+        JWT_SECRET = get_jwt_secret() or get_config('jwt/secret', os.getenv('JWT_SECRET', 'your-secret-key-change-in-production'))
+    else:
+        JWT_SECRET = get_config('jwt/secret', os.getenv('JWT_SECRET', 'your-secret-key-change-in-production'))
     JWT_ALGORITHM = get_config('jwt/algorithm', 'HS256')
     JWT_EXPIRATION_HOURS = int(get_config('jwt/expiration_hours', os.getenv('JWT_EXPIRATION_HOURS', '24')))
     
-    # PostgreSQL konfigurim nga Consul
+    # PostgreSQL konfigurim nga Vault ose Consul
     DB_CONFIG = {
         'host': get_config('postgres/host', os.getenv('POSTGRES_HOST', 'smartgrid-postgres')),
         'port': get_config('postgres/port', os.getenv('POSTGRES_PORT', '5432')),
