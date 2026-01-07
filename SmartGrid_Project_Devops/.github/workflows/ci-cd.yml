@@ -150,7 +150,7 @@ jobs:
           export KUBECONFIG="$KUBECONFIG"
           kubectl create namespace smartgrid --dry-run=client -o yaml | kubectl apply -f - || echo "Namespace may already exist"
       
-      - name: Deploy to Kubernetes
+      - name: Deploy në Kubernetes
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig
         run: |
