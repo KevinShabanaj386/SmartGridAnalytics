@@ -228,6 +228,25 @@ services:
       - mongodb_data:/data/db
     restart: unless-stopped
 
+  # Cassandra për hybrid storage - time-series data dhe high write throughput (100% HYBRID STORAGE)
+  cassandra:
+    image: cassandra:4.1
+    container_name: smartgrid-cassandra
+    ports:
+      - "9042:9042"  # CQL native port
+      - "7000:7000"   # Inter-node communication
+      - "7001:7001"   # TLS inter-node communication
+    environment:
+      - CASSANDRA_CLUSTER_NAME=smartgrid-cluster
+      - CASSANDRA_DC=datacenter1
+      - CASSANDRA_RACK=rack1
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=128M
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+    restart: unless-stopped
+
   # Mikrosherbimet
   data-ingestion-service:
     build: ./data-ingestion-service
@@ -449,3 +468,4 @@ volumes:
   sonarqube_extensions:
   sonarqube_logs:
   mongodb_data:
+  cassandra_data:
