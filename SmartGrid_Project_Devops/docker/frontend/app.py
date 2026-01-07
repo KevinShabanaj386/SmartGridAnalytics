@@ -588,29 +588,48 @@ def proxy_budget_calculator():
         # Forward request to analytics service
         params = request.args.to_dict()
         
-        # Try configured URL first
-        try:
-            response = requests.get(
-                f'{ANALYTICS_SERVICE_URL}/api/v1/analytics/budget-calculator',
-                params=params,
-                timeout=10
-            )
-            if response.status_code == 200:
-                return jsonify(response.json()), response.status_code
-        except requests.exceptions.RequestException as e:
-            logger.debug(f"Failed to connect to {ANALYTICS_SERVICE_URL}: {e}")
+        # Use session with retries for better reliability
+        max_retries = 3
+        timeout = 15  # Increased timeout
         
-        # Try localhost fallback
-        try:
-            response = requests.get(
-                'http://localhost:5002/api/v1/analytics/budget-calculator',
-                params=params,
-                timeout=10
-            )
-            if response.status_code == 200:
-                return jsonify(response.json()), response.status_code
-        except requests.exceptions.RequestException as e:
-            logger.debug(f"Failed to connect to localhost:5002: {e}")
+        # Try configured URL first
+        for attempt in range(max_retries):
+            try:
+                response = session_with_retries.get(
+                    f'{ANALYTICS_SERVICE_URL}/api/v1/analytics/budget-calculator',
+                    params=params,
+                    timeout=timeout
+                )
+                if response.status_code == 200:
+                    return jsonify(response.json()), response.status_code
+                elif response.status_code >= 500:
+                    # Server error, retry
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Analytics service returned {response.status_code}, retrying... (attempt {attempt + 1}/{max_retries})")
+                        continue
+                    else:
+                        return jsonify({
+                            'error': f'Analytics service error: {response.status_code}',
+                            'status_code': response.status_code
+                        }), response.status_code
+                else:
+                    # Client error (4xx), don't retry
+                    return jsonify(response.json()), response.status_code
+            except requests.exceptions.Timeout as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Timeout connecting to analytics service, retrying... (attempt {attempt + 1}/{max_retries})")
+                    continue
+                else:
+                    logger.error(f"Timeout after {max_retries} attempts: {e}")
+            except requests.exceptions.RequestException as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Connection error, retrying... (attempt {attempt + 1}/{max_retries}): {e}")
+                    continue
+                else:
+                    logger.error(f"Failed to connect to {ANALYTICS_SERVICE_URL} after {max_retries} attempts: {e}")
+        
+        # Note: localhost fallback removed - not accessible from Docker container
+        # Analytics service should be accessible via ANALYTICS_SERVICE_URL (smartgrid-analytics:5002)
         
         # Return error if all attempts failed
         return jsonify({
@@ -619,7 +638,7 @@ def proxy_budget_calculator():
         }), 503
         
     except Exception as e:
-        logger.error(f"Error in budget calculator proxy: {e}")
+        logger.error(f"Error in budget calculator proxy: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

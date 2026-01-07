@@ -9,7 +9,7 @@
     <style>
         .calculator-container {
             max-width: 800px;
-            margin: 40px auto;
+            margin: 0 auto;
             padding: 30px;
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
@@ -225,9 +225,23 @@
     </style>
 </head>
 <body>
+    <div class="container">
+        <div class="header">
+            <h1>💰 Kalkulator i Buxhetit për Energji</h1>
+            <nav class="nav" role="navigation" aria-label="Main navigation">
+                <a href="/">Dashboard</a>
+                <a href="/dashboard">Statistikat</a>
+                <a href="/analytics">Analiza</a>
+                <a href="/sensors">Sensorët</a>
+                <a href="/budget-calculator" class="active" aria-current="page">💰 Buxheti</a>
+                <a href="/kosovo">🇽🇰 Kosovo</a>
+                <button class="btn btn-sm btn-outline" style="margin-left:auto;" onclick="logout()">Logout</button>
+            </nav>
+        </div>
+        
+        <main style="margin-top: 20px;">
     <div class="calculator-container">
         <div class="calculator-header">
-            <h1>💰 Kalkulator i Buxhetit për Energji</h1>
             <p style="color: #6b7280;">Llogarit sa kWh mund të konsumosh për një shumë në Euro, ose anasjelltas</p>
         </div>
 
@@ -340,15 +354,38 @@
                     : `/api/v1/analytics/budget-calculator?amount_kwh=${value}`;
 
                 const response = await fetch(url);
-                const data = await response.json();
+                
+                // Check if response is ok
+                if (!response.ok) {
+                    let errorData;
+                    try {
+                        const errorText = await response.text();
+                        errorData = JSON.parse(errorText);
+                    } catch (e) {
+                        errorData = { error: `Server error: ${response.status} ${response.statusText}` };
+                    }
+                    alert('Gabim: ' + (errorData.error || 'Llogaritja dështoi'));
+                    console.error('API Error:', errorData);
+                    return;
+                }
+                
+                let data;
+                try {
+                    data = await response.json();
+                } catch (e) {
+                    alert('Gabim: Përgjigja nga serveri nuk është e vlefshme.');
+                    console.error('JSON Parse Error:', e);
+                    return;
+                }
 
                 if (data.status === 'success') {
                     displayResult(data, type);
                 } else {
                     alert('Gabim: ' + (data.error || 'Llogaritja dështoi'));
+                    console.error('Calculation Error:', data);
                 }
             } catch (error) {
-                console.error('Error:', error);
+                console.error('Network Error:', error);
                 alert('Gabim në lidhje me serverin. Ju lutem provoni përsëri.');
             }
         }
@@ -436,7 +473,15 @@
         document.getElementById('amountKwh').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') calculateReverse();
         });
+        
+        function logout() {
+            if (confirm('Jeni të sigurt që dëshironi të dilni?')) {
+                window.location.href = '/';
+            }
+        }
     </script>
+        </main>
+    </div>
 </body>
 </html>
 
