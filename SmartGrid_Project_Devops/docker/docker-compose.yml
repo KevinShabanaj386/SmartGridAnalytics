@@ -205,6 +205,15 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
 
+  # Memcached për distributed caching (kërkesë e profesorit)
+  memcached:
+    image: memcached:1.6-alpine
+    container_name: smartgrid-memcached
+    ports:
+      - "11211:11211"
+    command: ["-m", "256"]  # 256MB memory
+    restart: unless-stopped
+
   # MongoDB për hybrid storage - audit logs dhe metadata (kërkesë e profesorit)
   mongodb:
     image: mongo:7.0
@@ -264,10 +273,14 @@ services:
       - POSTGRES_PASSWORD=smartgrid123
       - REDIS_HOST=smartgrid-redis
       - REDIS_PORT=6379
+      - MEMCACHED_HOST=smartgrid-memcached
+      - MEMCACHED_PORT=11211
+      - USE_MEMCACHED=true
       - MLFLOW_TRACKING_URI=http://smartgrid-mlflow:5000
     depends_on:
       - postgres
       - redis
+      - memcached
       - mlflow
     restart: unless-stopped
 

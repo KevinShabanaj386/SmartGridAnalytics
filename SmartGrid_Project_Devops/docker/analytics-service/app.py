@@ -29,16 +29,19 @@ except ImportError:
     INPUT_VALIDATION_AVAILABLE = False
     logger.warning("Input validation module not available")
 
-# Initialize Redis caching
+# Initialize Redis dhe Memcached caching
 try:
-    from cache import init_redis, cache_result
-    if init_redis():
-        logger.info("Redis caching enabled")
+    from cache import init_redis, init_memcached, cache_result
+    redis_enabled = init_redis()
+    memcached_enabled = init_memcached()
+    
+    if redis_enabled or memcached_enabled:
+        logger.info(f"Caching enabled - Redis: {redis_enabled}, Memcached: {memcached_enabled}")
     else:
-        logger.warning("Redis caching disabled - continuing without cache")
+        logger.warning("Caching disabled - continuing without cache")
         cache_result = lambda ttl=None: lambda f: f  # No-op decorator
 except Exception as e:
-    logger.warning(f"Could not initialize Redis: {e}")
+    logger.warning(f"Could not initialize caching: {e}")
     cache_result = lambda ttl=None: lambda f: f  # No-op decorator
 
 # Consul Config Management
