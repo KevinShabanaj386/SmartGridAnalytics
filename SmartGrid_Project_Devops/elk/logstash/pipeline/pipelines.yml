@@ -1,0 +1,11 @@
+# Logstash Pipelines Configuration
+# Përcakton pipelines për log processing dhe threat detection
+
+- pipeline.id: main
+  path.config: "/usr/share/logstash/pipeline/logstash.conf"
+  pipeline.workers: 2
+
+- pipeline.id: threat-detection
+  path.config: "/usr/share/logstash/pipeline/threat-detection.conf"
+  pipeline.workers: 1
+

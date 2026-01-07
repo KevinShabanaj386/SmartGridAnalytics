@@ -121,12 +121,14 @@ services:
       - ../elk/logstash/config:/usr/share/logstash/config
     ports:
       - "5044:5044"
+      - "5000:5000"  # TCP input për logs
       - "9600:9600"
     environment:
-      - "LS_JAVA_OPTS=-Xmx256m -Xms256m"
+      - "LS_JAVA_OPTS=-Xmx512m -Xms512m"
     depends_on:
       - elasticsearch
-    command: logstash -f /usr/share/logstash/pipeline/logstash.conf
+    # Përdor pipelines.yml për multiple pipelines (main + threat-detection)
+    command: logstash --path.settings=/usr/share/logstash/config --path.config=/usr/share/logstash/pipeline
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.11.0
