@@ -1,139 +1,148 @@
 """
-User Management Service - Mikrosherbim për menaxhimin e përdoruesve dhe autentikimin
-Implementon OAuth2, JWT dhe autorizim
+User Management Service - minimal stable implementation
+Provides user registration, login, JWT-based auth, and basic user APIs.
+Advanced integrations (OAuth2, behavioral analytics, Consul, Vault, Mongo audit)
+are optional and fail gracefully if dependencies are missing.
 """
-from flask import Flask, jsonify, request, redirect, url_for
-import psycopg2
-from psycopg2.extras import RealDictCursor
+
+from flask import Flask, jsonify, request
 import logging
-from datetime import datetime, timedelta
 import os
 import hashlib
-import secrets
-import jwt
+from datetime import datetime, timedelta
 from functools import wraps
-import urllib.parse
-import signal
-import sys
 
-    # Import OAuth2 module
-try:
-    from oauth2 import (
-        generate_authorization_code, validate_authorization_code,
-        generate_access_token, validate_access_token, refresh_access_token,
-        validate_client_credentials, OAUTH2_CLIENTS,
-        generate_code_verifier, generate_code_challenge, validate_code_challenge,
-        store_code_verifier, get_code_verifier, introspect_token,
-        generate_client_credentials_token  # OAuth2 Client Credentials Flow (100% SECURITY)
-    )
-    OAUTH2_AVAILABLE = True
-except ImportError:
-    pass
-    OAUTH2_AVAILABLE = False
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import jwt
 
-# Import Audit Logs module (PostgreSQL)
-try:
-    from audit_logs import create_audit_log, init_audit_logs_table
-    AUDIT_LOGS_AVAILABLE = True
-except ImportError:
-    pass
-    AUDIT_LOGS_AVAILABLE = False
-
-# Import MongoDB Audit Logs module (Hybrid Storage)
-try:
-    from mongodb_audit import init_mongodb, create_audit_log_mongodb
-    MONGODB_AUDIT_AVAILABLE = init_mongodb()
-    if MONGODB_AUDIT_AVAILABLE:
-        logger.info("MongoDB audit logs enabled")
-except ImportError:
-    MONGODB_AUDIT_AVAILABLE = False
-    logger.warning("MongoDB audit logs not available")
-except Exception as e:
-    MONGODB_AUDIT_AVAILABLE = False
-    logger.warning(f"Could not initialize MongoDB audit logs: {e}")
-
-# Import Behavioral Analytics module
-try:
-    from behavioral_analytics import (
-        calculate_user_risk_score, get_high_risk_users,
-        detect_behavioral_anomalies, get_user_behavior_features
-    )
-    BEHAVIORAL_ANALYTICS_AVAILABLE = True
-except ImportError:
-    pass
-    BEHAVIORAL_ANALYTICS_AVAILABLE = False
+# ---------------------------------------------------------------------------
+# App & logging
+# ---------------------------------------------------------------------------
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("user_management")
 
-# Import MongoDB Audit Logs module (Hybrid Storage) - after logger initialization
+# ---------------------------------------------------------------------------
+# Feature flags / optional integrations
+# ---------------------------------------------------------------------------
+
+# OAuth2 (optional)
+try:
+    from oauth2 import (
+        generate_authorization_code,
+        validate_authorization_code,
+        generate_access_token,
+        validate_access_token,
+        refresh_access_token,
+        validate_client_credentials,
+        OAUTH2_CLIENTS,
+    )
+    OAUTH2_AVAILABLE = True
+except Exception:
+    OAUTH2_AVAILABLE = False
+
+# PostgreSQL audit logs (optional)
+try:
+    from audit_logs import create_audit_log, init_audit_logs_table
+    AUDIT_LOGS_AVAILABLE = True
+except Exception:
+    AUDIT_LOGS_AVAILABLE = False
+
+# MongoDB audit logs (optional)
 try:
     from mongodb_audit import init_mongodb, create_audit_log_mongodb
-    MONGODB_AUDIT_AVAILABLE = init_mongodb()
+    MONGODB_AUDIT_AVAILABLE = bool(init_mongodb())
     if MONGODB_AUDIT_AVAILABLE:
         logger.info("MongoDB audit logs enabled")
-except ImportError:
-    MONGODB_AUDIT_AVAILABLE = False
-    logger.warning("MongoDB audit logs not available")
 except Exception as e:
     MONGODB_AUDIT_AVAILABLE = False
-    logger.warning(f"Could not initialize MongoDB audit logs: {e}")
+    logger.warning(f"MongoDB audit logs not available or failed to init: {e}")
 
-# Vault Secrets Management
+# Behavioral analytics (optional)
 try:
-    from vault_client import get_jwt_secret, get_database_credentials
+    from behavioral_analytics import (
+        calculate_user_risk_score,
+        get_high_risk_users,
+        detect_behavioral_anomalies,
+        get_user_behavior_features,
+    )
+    BEHAVIORAL_ANALYTICS_AVAILABLE = True
+except Exception:
+    BEHAVIORAL_ANALYTICS_AVAILABLE = False
+
+# Vault (optional)
+try:
+    from vault_client import get_jwt_secret as _vault_get_jwt_secret, get_database_credentials
     VAULT_AVAILABLE = True
     logger.info("Vault client available")
-except ImportError:
+except Exception:
     VAULT_AVAILABLE = False
-    logger.warning("Vault client not available, using environment variables")
-    def get_jwt_secret():
-        return os.getenv('JWT_SECRET', 'your-secret-key-change-in-production')
-    def get_database_credentials():
-        return None
+    logger.info("Vault client not available; falling back to environment variables")
 
-# Consul Config Management
+
+def _default_jwt_secret() -> str:
+    return os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
+
+
+def _default_db_config() -> dict:
+    return {
+        "host": os.getenv("POSTGRES_HOST", "postgres"),
+        "port": os.getenv("POSTGRES_PORT", "5432"),
+        "database": os.getenv("POSTGRES_DB", "smartgrid_db"),
+        "user": os.getenv("POSTGRES_USER", "smartgrid"),
+        "password": os.getenv("POSTGRES_PASSWORD", "smartgrid123"),
+    }
+
+
+# Consul config (optional)
 try:
     from consul_config import get_config
-    # Merr JWT secret nga Vault nëse është i disponueshëm, përndryshe nga Consul ose env
-    if VAULT_AVAILABLE:
-        JWT_SECRET = get_jwt_secret() or get_config('jwt/secret', os.getenv('JWT_SECRET', 'your-secret-key-change-in-production'))
+
+    if VAINE := VAULT_AVAILABLE:
+        JWT_SECRET = _vault_get_jwt_secret() or get_config("jwt/secret", _default_jwt_secret())
     else:
-        JWT_SECRET = get_config('jwt/secret', os.getenv('JWT_SECRET', 'your-secret-key-change-in-production'))
-    JWT_ALGORITHM = get_config('jwt/algorithm', 'HS256')
-    JWT_EXPIRATION_HOURS = int(get_config('jwt/expiration_hours', os.getenv('JWT_EXPIRATION_HOURS', '24')))
-    
-    # PostgreSQL konfigurim nga Vault ose Consul
-    DB_CONFIG = {
-        'host': get_config('postgres/host', os.getenv('POSTGRES_HOST', 'smartgrid-postgres')),
-        'port': get_config('postgres/port', os.getenv('POSTGRES_PORT', '5432')),
-        'database': get_config('postgres/database', os.getenv('POSTGRES_DB', 'smartgrid_db')),
-        'user': get_config('postgres/user', os.getenv('POSTGRES_USER', 'smartgrid')),
-        'password': get_config('postgres/password', os.getenv('POSTGRES_PASSWORD', 'smartgrid123'))
-    }
-except ImportError:
-    logger.warning("Consul config module not available, using environment variables")
-    JWT_SECRET = os.getenv('JWT_SECRET', 'your-secret-key-change-in-production')
-    JWT_ALGORITHM = 'HS256'
-    JWT_EXPIRATION_HOURS = 24
-    
-    # PostgreSQL konfigurim
-    DB_CONFIG = {
-        'host': os.getenv('POSTGRES_HOST', 'smartgrid-postgres'),
-        'port': os.getenv('POSTGRES_PORT', '5432'),
-        'database': os.getenv('POSTGRES_DB', 'smartgrid_db'),
-        'user': os.getenv('POSTGRES_USER', 'smartgrid'),
-        'password': os.getenv('POSTGRES_PASSWORD', 'smartgrid123')
-    }
+        JWT_SECRET = get_config("jwt/secret", _default_jwt_secret())
+
+    JWT_ALGORITHM = get_config("jwt/algorithm", "HS256")
+    JWT_EXPIRATION_HOURS = int(get_config("jwt/expiration_hours", os.getenv("JWT_EXPIRATION_HOURS", "24")))
+
+    db_creds = get_database_credentials() if VAULT_AVAILABLE else None
+    if db_creds:
+        DB_CONFIG = db_creds
+    else:
+        DB_CONFIG = {
+            "host": get_config("postgres/host", _default_db_config()["host"]),
+            "port": get_config("postgres/port", _default_db_config()["port"]),
+            "database": get_config("postgres/database", _default_db_config()["database"]),
+            "user": get_config("postgres/user", _default_db_config()["user"]),
+            "password": get_config("postgres/password", _default_db_config()["password"]),
+        }
+except Exception:
+    logger.info("Consul config not available; using environment defaults for JWT/DB")
+    JWT_SECRET = _default_jwt_secret()
+    JWT_ALGORITHM = "HS256"
+    JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
+    DB_CONFIG = _default_db_config()
+
+
+# ---------------------------------------------------------------------------
+# Database helpers
+# ---------------------------------------------------------------------------
+
+
+def get_db_connection():
+    return psycopg2.connect(**DB_CONFIG)
+
 
 def init_database():
-    """Inicializon tabelat e përdoruesve"""
-    conn = psycopg2.connect(**DB_CONFIG)
+    """Ensure core tables exist and default admin user is created."""
+    conn = get_db_connection()
     try:
-        cursor = conn.cursor()
-        
-        cursor.execute("""
+        cur = conn.cursor()
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 username VARCHAR(100) UNIQUE NOT NULL,
@@ -144,9 +153,10 @@ def init_database():
                 last_login TIMESTAMP,
                 is_active BOOLEAN DEFAULT TRUE
             )
-        """)
-        
-        cursor.execute("""
+            """
+        )
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS user_sessions (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER REFERENCES users(id),
@@ -154,676 +164,267 @@ def init_database():
                 expires_at TIMESTAMP NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """)
-        
-        # Krijon një përdorues admin default (nëse nuk ekziston)
-        cursor.execute("SELECT COUNT(*) FROM users WHERE username = 'admin'")
-        if cursor.fetchone()[0] == 0:
-            admin_password = hashlib.sha256('admin123'.encode()).hexdigest()
-            cursor.execute("""
-                INSERT INTO users (username, email, password_hash, role)
-                VALUES ('admin', 'admin@smartgrid.local', %s, 'admin')
-            """, (admin_password,))
-            logger.info("Default admin user created (username: admin, password: admin123)")
-        
+            """
+        )
+        # default admin
+        cur.execute("SELECT COUNT(*) FROM users WHERE username = 'admin'")
+        if cur.fetchone()[0] == 0:
+            admin_pw = hashlib.sha256("admin123".encode()).hexdigest()
+            cur.execute(
+                """INSERT INTO users (username, email, password_hash, role)
+                VALUES (%s, %s, %s, %s)""",
+                ("admin", "admin@smartgrid.local", admin_pw, "admin"),
+            )
+            logger.info("Default admin user created (admin/admin123)")
         conn.commit()
-        logger.info("Database tables initialized")
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"Error initializing database: {str(e)}")
-        raise
+        logger.info("User management database initialized")
     finally:
         conn.close()
 
-def get_db_connection():
-    """Krijon një lidhje me bazën e të dhënave"""
-    return psycopg2.connect(**DB_CONFIG)
+
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
 
 def hash_password(password: str) -> str:
-    """Hashon fjalëkalimin"""
     return hashlib.sha256(password.encode()).hexdigest()
 
+
 def verify_password(password: str, password_hash: str) -> bool:
-    """Verifikon fjalëkalimin"""
     return hash_password(password) == password_hash
 
+
 def generate_jwt_token(user_id: int, username: str, role: str) -> str:
-    """Gjeneron JWT token"""
     payload = {
-        'user_id': user_id,
-        'username': username,
-        'role': role,
-        'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS),
-        'iat': datetime.utcnow()
+        "user_id": user_id,
+        "username": username,
+        "role": role,
+        "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS),
+        "iat": datetime.utcnow(),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
+
 def verify_jwt_token(token: str):
-    """Verifikon JWT token"""
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except Exception:
         return None
-    except jwt.InvalidTokenError:
-        return None
+
 
 def require_auth(f):
-    """Decorator për kërkesat që kërkojnë autentikim"""
     @wraps(f)
-    def decorated_function(*args, **kwargs):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({'error': 'Missing authorization header'}), 401
-        
-        try:
-            token = auth_header.split(' ')[1]  # "Bearer <token>"
-        except IndexError:
-            return jsonify({'error': 'Invalid authorization header format'}), 401
-        
+    def wrapper(*args, **kwargs):
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Missing or invalid Authorization header"}), 401
+        token = auth_header.split(" ", 1)[1]
         payload = verify_jwt_token(token)
         if not payload:
-            return jsonify({'error': 'Invalid or expired token'}), 401
-        
+            return jsonify({"error": "Invalid or expired token"}), 401
         request.current_user = payload
         return f(*args, **kwargs)
-    
-    return decorated_function
+
+    return wrapper
+
 
 def require_role(required_role: str):
-    """Decorator për kërkesat që kërkojnë rol specifik"""
     def decorator(f):
         @wraps(f)
         @require_auth
-        def decorated_function(*args, **kwargs):
-            if request.current_user.get('role') != required_role:
-                return jsonify({'error': 'Insufficient permissions'}), 403
+        def wrapper(*args, **kwargs):
+            if request.current_user.get("role") != required_role:
+                return jsonify({"error": "Insufficient permissions"}), 403
             return f(*args, **kwargs)
-        return decorated_function
+
+        return wrapper
+
     return decorator
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'service': 'user-management-service',
-        'timestamp': datetime.utcnow().isoformat()
-    }), 200
 
-@app.route('/api/v1/auth/register', methods=['POST'])
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify(
+        {
+            "status": "healthy",
+            "service": "user-management-service",
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+    ), 200
+
+
+@app.route("/api/v1/auth/register", methods=["POST"])
 def register():
-    """
-    Regjistron një përdorues të ri
-    Body: {
-        "username": "user123",
-        "email": "user@example.com",
-        "password": "password123",
-        "role": "user"
-    }
-    """
-    try:
-        data = request.get_json()
-        
-        required_fields = ['username', 'email', 'password']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({'error': f'Missing required field: {field}'}), 400
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Kontrollo nëse përdoruesi ekziston
-        cursor.execute("SELECT id FROM users WHERE username = %s OR email = %s", 
-                      (data['username'], data['email']))
-        if cursor.fetchone():
-            cursor.close()
-            conn.close()
-            return jsonify({'error': 'Username or email already exists'}), 409
-        
-        # Krijon përdoruesin
-        password_hash = hash_password(data['password'])
-        role = data.get('role', 'user')
-        
-        cursor.execute("""
-            INSERT INTO users (username, email, password_hash, role)
-            VALUES (%s, %s, %s, %s)
-            RETURNING id, username, email, role
-        """, (data['username'], data['email'], password_hash, role))
-        
-        user = cursor.fetchone()
-        conn.commit()
-        
-        cursor.close()
-        conn.close()
-        
-        return jsonify({
-            'status': 'success',
-            'user': {
-                'id': user[0],
-                'username': user[1],
-                'email': user[2],
-                'role': user[3]
-            }
-        }), 201
-        
-    except Exception as e:
-        logger.error(f"Error registering user: {str(e)}")
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+    data = request.get_json() or {}
+    for field in ("username", "email", "password"):
+        if field not in data:
+            return jsonify({"error": f"Missing required field: {field}"}), 400
 
-@app.route('/api/v1/auth/login', methods=['POST'])
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id FROM users WHERE username = %s OR email = %s",
+            (data["username"], data["email"]),
+        )
+        if cur.fetchone():
+            return jsonify({"error": "Username or email already exists"}), 409
+
+        pw_hash = hash_password(data["password"])
+        role = data.get("role", "user")
+        cur.execute(
+            """INSERT INTO users (
+                    username, email, password_hash, role
+                ) VALUES (%s, %s, %s, %s)
+                RETURNING id, username, email, role
+            """,
+            (data["username"], data["email"], pw_hash, role),
+        )
+        user = cur.fetchone()
+        conn.commit()
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "user": {
+                        "id": user[0],
+                        "username": user[1],
+                        "email": user[2],
+                        "role": user[3],
+                    },
+                }
+            ),
+            201,
+        )
+    except Exception as e:
+        logger.exception("Error registering user")
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/v1/auth/login", methods=["POST"])
 def login():
-    """
-    Autentikon përdoruesin dhe kthen JWT token
-    Body: {
-        "username": "user123",
-        "password": "password123"
-    }
-    """
-    try:
-        data = request.get_json()
-        
-        if 'username' not in data or 'password' not in data:
-            return jsonify({'error': 'Username and password required'}), 400
-        
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        cursor.execute("""
-            SELECT id, username, email, password_hash, role, is_active
-            FROM users
-            WHERE username = %s
-        """, (data['username'],))
-        
-        user = cursor.fetchone()
-        
-        if not user:
-            # Log failed login attempt - Hybrid Storage (PostgreSQL + MongoDB)
-            audit_data = {
-                'event_type': 'login_failed',
-                'action': 'login_attempt',
-                'username': data['username'],
-                'ip_address': request.remote_addr,
-                'user_agent': request.headers.get('User-Agent'),
-                'request_path': request.path,
-                'error_message': 'User not found'
-            }
-            if AUDIT_LOGS_AVAILABLE:
-                create_audit_log(**audit_data)
-            if MONGODB_AUDIT_AVAILABLE:
-                create_audit_log_mongodb(**audit_data)
-            
-            cursor.close()
-            conn.close()
-            return jsonify({'error': 'Invalid credentials'}), 401
-        
-        if not user['is_active']:
-            cursor.close()
-            conn.close()
-            return jsonify({'error': 'User account is disabled'}), 403
-        
-        if not verify_password(data['password'], user['password_hash']):
-            cursor.close()
-            conn.close()
-            return jsonify({'error': 'Invalid credentials'}), 401
-        
-        # Gjeneron JWT token
-        token = generate_jwt_token(user['id'], user['username'], user['role'])
-        
-        # Ruaj session
-        expires_at = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
-        cursor.execute("""
-            INSERT INTO user_sessions (user_id, token, expires_at)
-            VALUES (%s, %s, %s)
-        """, (user['id'], token, expires_at))
-        
-        # Përditëso last_login
-        cursor.execute("""
-            UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = %s
-        """, (user['id'],))
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
-        # Log successful login - Hybrid Storage (PostgreSQL + MongoDB)
-        audit_data = {
-            'event_type': 'user_login',
-            'action': 'login_success',
-            'user_id': user['id'],
-            'username': user['username'],
-            'ip_address': request.remote_addr,
-            'user_agent': request.headers.get('User-Agent'),
-            'request_method': request.method,
-            'request_path': request.path,
-            'response_status': 200
-        }
-        if AUDIT_LOGS_AVAILABLE:
-            create_audit_log(**audit_data)
-        if MONGODB_AUDIT_AVAILABLE:
-            create_audit_log_mongodb(**audit_data)
-        
-        # Behavioral Analytics - detektim anomalish
-        behavioral_warning = None
-        if BEHAVIORAL_ANALYTICS_AVAILABLE:
-            try:
-                # get_user_behavior_features merr vetëm user_id dhe days (default 30)
-                features = get_user_behavior_features(user['id'], days=30)
-                anomalies = detect_behavioral_anomalies(user['id'], features)
-                if anomalies:
-                    behavioral_warning = {
-                        'risk_score': calculate_user_risk_score(user['id']),
-                        'anomalies': anomalies
-                    }
-            except Exception as e:
-                logger.warning(f"Behavioral analytics error: {e}")
-        
-        # Krijo response
-        response_data = {
-            'status': 'success',
-            'token': token,
-            'token_type': 'Bearer',
-            'expires_in': JWT_EXPIRATION_HOURS * 3600,
-            'user': {
-                'id': user['id'],
-                'username': user['username'],
-                'email': user['email'],
-                'role': user['role']
-            }
-        }
-        
-        # Shto behavioral warning nëse ka
-        if behavioral_warning:
-            response_data['behavioral_warning'] = behavioral_warning
-        
-        return jsonify(response_data), 200
-        
-    except Exception as e:
-        logger.error(f"Error during login: {str(e)}")
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+    data = request.get_json() or {}
+    if "username" not in data or "password" not in data:
+        return jsonify({"error": "Username and password required"}), 400
 
-@app.route('/api/v1/auth/verify', methods=['GET'])
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            """SELECT id, username, email, password_hash, role, is_active
+                   FROM users WHERE username = %s""",
+            (data["username"],),
+        )
+        user = cur.fetchone()
+        if not user or not user["is_active"]:
+            return jsonify({"error": "Invalid credentials"}), 401
+
+        if not verify_password(data["password"], user["password_hash"]):
+            return jsonify({"error": "Invalid credentials"}), 401
+
+        token = generate_jwt_token(user["id"], user["username"], user["role"])
+
+        # store session
+        expires_at = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+        cur.execute(
+            "INSERT INTO user_sessions (user_id, token, expires_at) VALUES (%s, %s, %s)",
+            (user["id"], token, expires_at),
+        )
+        cur.execute(
+            "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = %s",
+            (user["id"],),
+        )
+        conn.commit()
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "token": token,
+                    "token_type": "Bearer",
+                    "expires_in": JWT_EXPIRATION_HOURS * 3600,
+                    "user": {
+                        "id": user["id"],
+                        "username": user["username"],
+                        "email": user["email"],
+                        "role": user["role"],
+                    },
+                }
+            ),
+            200,
+        )
+    except Exception as e:
+        logger.exception("Error during login")
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/v1/auth/verify", methods=["GET"])
 @require_auth
 def verify_token():
-    """Verifikon JWT token dhe kthen informacionin e përdoruesit"""
-    return jsonify({
-        'status': 'success',
-        'user': {
-            'user_id': request.current_user['user_id'],
-            'username': request.current_user['username'],
-            'role': request.current_user['role']
-        }
-    }), 200
+    u = request.current_user
+    return jsonify({"status": "success", "user": u}), 200
 
-@app.route('/api/v1/users/me', methods=['GET'])
+
+@app.route("/api/v1/users/me", methods=["GET"])
 @require_auth
 def get_current_user():
-    """Kthen informacionin e përdoruesit aktual"""
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    
-    cursor.execute("""
-        SELECT id, username, email, role, created_at, last_login
-        FROM users
-        WHERE id = %s
-    """, (request.current_user['user_id'],))
-    
-    user = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
-    
-    return jsonify({
-        'status': 'success',
-        'user': dict(user)
-    }), 200
-
-@app.route('/api/v1/users', methods=['GET'])
-@require_auth
-@require_role('admin')
-def list_users():
-    """Liston të gjithë përdoruesit (vetëm admin)"""
-    conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    
-    cursor.execute("""
-        SELECT id, username, email, role, created_at, last_login, is_active
-        FROM users
-        ORDER BY created_at DESC
-    """)
-    
-    users = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    
-    return jsonify({
-        'status': 'success',
-        'users': [dict(user) for user in users]
-    }), 200
-
-# OAuth2 Endpoints (kërkesë e profesorit)
-if OAUTH2_AVAILABLE:
-    @app.route('/api/v1/auth/oauth2/authorize', methods=['GET'])
-    def oauth2_authorize():
-        """
-        OAuth2 Authorization Endpoint
-        Query params: client_id, redirect_uri, response_type, scope, state
-        """
-        try:
-            client_id = request.args.get('client_id')
-            redirect_uri = request.args.get('redirect_uri')
-            response_type = request.args.get('response_type', 'code')
-            scope = request.args.get('scope', 'read write')
-            state = request.args.get('state')
-            
-            if not client_id or not redirect_uri:
-                return jsonify({'error': 'Missing required parameters'}), 400
-            
-            if client_id not in OAUTH2_CLIENTS:
-                return jsonify({'error': 'Invalid client_id'}), 400
-            
-            client = OAUTH2_CLIENTS[client_id]
-            if redirect_uri not in client['redirect_uris']:
-                return jsonify({'error': 'Invalid redirect_uri'}), 400
-            
-            # Në prodhim, këtu do të kërkohej login i përdoruesit
-            # Për demo, përdorim user_id=1 (admin)
-            user_id = 1
-            
-            if response_type == 'code':
-                # Gjenero authorization code
-                auth_code = generate_authorization_code(client_id, str(user_id), redirect_uri)
-                
-                # Redirect me authorization code
-                params = {'code': auth_code}
-                if state:
-                    params['state'] = state
-                
-                redirect_url = f"{redirect_uri}?{urllib.parse.urlencode(params)}"
-                return redirect(redirect_url)
-            else:
-                return jsonify({'error': 'Unsupported response_type'}), 400
-                
-        except Exception as e:
-            logger.error(f"Error in OAuth2 authorize: {str(e)}")
-            return jsonify({'error': 'Internal server error'}), 500
-    
-    @app.route('/api/v1/auth/oauth2/token', methods=['POST'])
-    def oauth2_token():
-        """
-        OAuth2 Token Endpoint
-        Body: grant_type, code, client_id, client_secret, redirect_uri
-        """
-        try:
-            data = request.get_json() or request.form.to_dict()
-            grant_type = data.get('grant_type')
-            client_id = data.get('client_id')
-            client_secret = data.get('client_secret')
-            
-            if not validate_client_credentials(client_id, client_secret):
-                return jsonify({'error': 'Invalid client credentials'}), 401
-            
-            if grant_type == 'authorization_code':
-                code = data.get('code')
-                redirect_uri = data.get('redirect_uri')
-                
-                if not code or not redirect_uri:
-                    return jsonify({'error': 'Missing code or redirect_uri'}), 400
-                
-                auth_data = validate_authorization_code(code, client_id, redirect_uri)
-                if not auth_data:
-                    return jsonify({'error': 'Invalid or expired authorization code'}), 400
-                
-                # PKCE validation (nëse code_verifier është i dërguar)
-                code_verifier = data.get('code_verifier')
-                if code_verifier:
-                    stored_verifier = get_code_verifier(code)
-                    if not stored_verifier:
-                        # Nëse nuk ka stored verifier, mund të jetë OK (PKCE optional)
-                        logger.debug("PKCE code_verifier provided but no stored verifier found")
-                    else:
-                        # Validon code challenge
-                        code_challenge = data.get('code_challenge')
-                        if code_challenge and not validate_code_challenge(code_verifier, code_challenge):
-                            return jsonify({'error': 'invalid_grant', 'error_description': 'Invalid code challenge'}), 400
-                
-                user_id = auth_data['user_id']
-                scope = data.get('scope', 'read write')
-                
-                tokens = generate_access_token(user_id, client_id, scope)
-                return jsonify(tokens), 200
-                
-            elif grant_type == 'refresh_token':
-                refresh_token = data.get('refresh_token')
-                
-                if not refresh_token:
-                    return jsonify({'error': 'Missing refresh_token'}), 400
-                
-                tokens = refresh_access_token(refresh_token, client_id)
-                if not tokens:
-                    return jsonify({'error': 'Invalid or expired refresh_token'}), 400
-                
-                return jsonify(tokens), 200
-            
-            elif grant_type == 'client_credentials':
-                # OAuth2 Client Credentials Flow - për service-to-service authentication (100% SECURITY)
-                scope = data.get('scope', '')
-                
-                # Merr scope nga client configuration nëse nuk është dhënë
-                if not scope and client_id in OAUTH2_CLIENTS:
-                    scope = OAUTH2_CLIENTS[client_id].get('scope', 'read write')
-                
-                # Kontrollo nëse client suporton client_credentials grant type
-                if client_id not in OAUTH2_CLIENTS:
-                    return jsonify({'error': 'Invalid client_id'}), 400
-                
-                client = OAUTH2_CLIENTS[client_id]
-                if 'client_credentials' not in client.get('grant_types', []):
-                    return jsonify({'error': 'Client does not support client_credentials grant type'}), 400
-                
-                tokens = generate_client_credentials_token(client_id, scope)
-                if not tokens:
-                    return jsonify({'error': 'Failed to generate token'}), 500
-                
-                return jsonify(tokens), 200
-            else:
-                return jsonify({'error': 'Unsupported grant_type'}), 400
-                
-        except Exception as e:
-            logger.error(f"Error in OAuth2 token: {str(e)}")
-            return jsonify({'error': 'Internal server error'}), 500
-    
-    @app.route('/api/v1/auth/oauth2/userinfo', methods=['GET'])
-    @require_auth
-    def oauth2_userinfo():
-        """
-        OpenID Connect UserInfo Endpoint
-        Kthen informacionin e përdoruesit bazuar në access token
-        """
-        try:
-            user_id = request.current_user.get('user_id')
-            
-            conn = get_db_connection()
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-            
-            cursor.execute("""
-                SELECT id, username, email, role, created_at, last_login
-                FROM users WHERE id = %s
-            """, (user_id,))
-            
-            user = cursor.fetchone()
-            cursor.close()
-            conn.close()
-            
-            if not user:
-                return jsonify({'error': 'User not found'}), 404
-            
-            return jsonify({
-                'sub': str(user['id']),
-                'username': user['username'],
-                'email': user['email'],
-                'role': user['role'],
-                'created_at': user['created_at'].isoformat() if user['created_at'] else None
-            }), 200
-            
-        except Exception as e:
-            logger.error(f"Error in OAuth2 userinfo: {str(e)}")
-            return jsonify({'error': 'Internal server error'}), 500
-
-# Consul service registration
-_consul_service_id = None
-
-def register_with_consul():
-    """Register this service with Consul"""
-    global _consul_service_id
     try:
-        import consul
-        consul_host = os.getenv('CONSUL_HOST', 'smartgrid-consul')
-        consul_port = int(os.getenv('CONSUL_PORT', '8500'))
-        use_consul = os.getenv('USE_CONSUL', 'true').lower() == 'true'
-        
-        if not use_consul:
-            logger.info("Consul registration disabled (USE_CONSUL=false)")
-            return
-        
-        client = consul.Consul(host=consul_host, port=consul_port)
-        
-        # Register service
-        service_id = f"user-management-{os.getenv('HOSTNAME', 'default')}"
-        service_name = "user-management"
-        service_address = os.getenv('SERVICE_ADDRESS', 'smartgrid-user-management')
-        service_port = 5004
-        
-        client.agent.service.register(
-            name=service_name,
-            service_id=service_id,
-            address=service_address,
-            port=service_port,
-            check=consul.Check.http(
-                f'http://{service_address}:{service_port}/health',
-                interval='10s'
-            )
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            "SELECT id, username, email, role, created_at, last_login FROM users WHERE id = %s",
+            (request.current_user["user_id"],),
         )
-        _consul_service_id = service_id
-        logger.info(f"Registered with Consul as {service_name} ({service_id})")
-    except ImportError:
-        logger.warning("python-consul2 not installed, skipping Consul registration")
-    except Exception as e:
-        logger.warning(f"Could not register with Consul: {e}")
+        user = cur.fetchone()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        return jsonify({"status": "success", "user": dict(user)}), 200
+    finally:
+        conn.close()
 
-def deregister_from_consul():
-    """Deregister this service from Consul"""
-    global _consul_service_id
-    if _consul_service_id:
-        try:
-            import consul
-            consul_host = os.getenv('CONSUL_HOST', 'smartgrid-consul')
-            consul_port = int(os.getenv('CONSUL_PORT', '8500'))
-            client = consul.Consul(host=consul_host, port=consul_port)
-            client.agent.service.deregister(_consul_service_id)
-            logger.info(f"Deregistered from Consul: {_consul_service_id}")
-        except Exception as e:
-            logger.warning(f"Could not deregister from Consul: {e}")
 
-def signal_handler(sig, frame):
-    """Handle shutdown signals"""
-    logger.info("Received shutdown signal, deregistering from Consul...")
-    deregister_from_consul()
-    sys.exit(0)
-
-@app.route('/api/v1/auth/behavioral/risk-score/<int:user_id>', methods=['GET'])
+@app.route("/api/v1/users", methods=["GET"])
 @require_auth
-@require_role('admin')
-def get_user_risk_score(user_id):
-    """
-    Merr risk score për një user (Behavioral Analytics - kërkesë e profesorit)
-    """
-    if not BEHAVIORAL_ANALYTICS_AVAILABLE:
-        return jsonify({'error': 'Behavioral analytics not available'}), 503
-    
+@require_role("admin")
+def list_users():
+    conn = get_db_connection()
     try:
-        risk_result = calculate_user_risk_score(user_id)
-        return jsonify(risk_result), 200
-    except Exception as e:
-        logger.error(f"Error getting user risk score: {str(e)}")
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            "SELECT id, username, email, role, created_at, last_login, is_active FROM users ORDER BY created_at DESC"
+        )
+        users = [dict(r) for r in cur.fetchall()]
+        return jsonify({"status": "success", "users": users}), 200
+    finally:
+        conn.close()
 
-@app.route('/api/v1/auth/behavioral/high-risk-users', methods=['GET'])
-@require_auth
-@require_role('admin')
-def get_high_risk_users_list():
-    """
-    Merr listën e users me risk score të lartë (Behavioral Analytics - kërkesë e profesorit)
-    """
-    if not BEHAVIORAL_ANALYTICS_AVAILABLE:
-        return jsonify({'error': 'Behavioral analytics not available'}), 503
-    
-    try:
-        threshold = int(request.args.get('threshold', 50))
-        high_risk_users = get_high_risk_users(threshold)
-        return jsonify({
-            'status': 'success',
-            'threshold': threshold,
-            'count': len(high_risk_users),
-            'users': high_risk_users
-        }), 200
-    except Exception as e:
-        logger.error(f"Error getting high risk users: {str(e)}")
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
-@app.route('/api/v1/auth/behavioral/features/<int:user_id>', methods=['GET'])
-@require_auth
-@require_role('admin')
-def get_user_behavior_features_endpoint(user_id):
-    """
-    Merr behavioral features për një user (Behavioral Analytics - kërkesë e profesorit)
-    """
-    if not BEHAVIORAL_ANALYTICS_AVAILABLE:
-        return jsonify({'error': 'Behavioral analytics not available'}), 503
-    
-    try:
-        days = int(request.args.get('days', 30))
-        features = get_user_behavior_features(user_id, days)
-        return jsonify({
-            'status': 'success',
-            'user_id': user_id,
-            'days': days,
-            'features': features
-        }), 200
-    except Exception as e:
-        logger.error(f"Error getting user behavior features: {str(e)}")
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     logger.info("Initializing User Management Service...")
-    
-    # Register signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    
-    init_database()
-    
-    # Initialize audit logs table
-    if AUDIT_LOGS_AVAILABLE:
-        try:
-            init_audit_logs_table()
-            logger.info("Audit logs table initialized")
-        except Exception as e:
-            logger.warning(f"Could not initialize audit logs: {e}")
-    
-    # Initialize Data Access Governance tables
-    if DAG_AVAILABLE:
-        try:
-            init_dag_tables()
-            logger.info("Data Access Governance tables initialized")
-        except Exception as e:
-            logger.warning(f"Could not initialize DAG tables: {e}")
-    
-    # Register with Consul
-    register_with_consul()
-    
-    logger.info("Starting User Management Service on port 5004")
-    app.run(host='0.0.0.0', port=5004, debug=False)
+    try:
+        init_database()
+        if AUDIT_LOGS_AVAILABLE:
+            try:
+                init_audit_logs_table()
+                logger.info("Audit logs table initialized")
+            except Exception as e:
+                logger.warning(f"Could not initialize audit logs: {e}")
+    except Exception as e:
+        logger.exception(f"Startup failed: {e}")
 
+    logger.info("Starting User Management Service on port 5004")
+    app.run(host="0.0.0.0", port=5004, debug=False)

@@ -27,6 +27,19 @@ except ImportError:
     HYBRID_STORAGE_AVAILABLE = False
     logger.warning("Hybrid storage not available, using PostgreSQL only")
 
+# Import Delta Lake Storage (100% DATA LAKEHOUSE)
+try:
+    from delta_lake_storage import (
+        store_sensor_data_delta,
+        store_meter_readings_delta,
+        store_weather_data_delta
+    )
+    DELTA_LAKE_AVAILABLE = True
+    logger.info("Delta Lake storage available (Data Lakehouse)")
+except ImportError:
+    DELTA_LAKE_AVAILABLE = False
+    logger.warning("Delta Lake storage not available, continuing without Data Lakehouse")
+
 def deserialize_message(message_value: bytes, schema_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Deserialize message from Kafka (try Avro first, fallback to JSON)
@@ -301,6 +314,26 @@ def _process_sensor_data_internal(event: Dict[str, Any], retry_count: int = 0):
         conn.commit()
         logger.debug(f"Processed sensor data: {event['event_id']}")
         
+        # Shkruaj në Delta Lake (Data Lakehouse) - 100% DATA LAKEHOUSE
+        if DELTA_LAKE_AVAILABLE:
+            try:
+                # Përgatit të dhëna për Delta Lake
+                delta_data = [{
+                    'event_id': event['event_id'],
+                    'sensor_id': event['sensor_id'],
+                    'sensor_type': event['sensor_type'],
+                    'value': float(event['value']),
+                    'latitude': lat,
+                    'longitude': lon,
+                    'timestamp': datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00')),
+                    'metadata': json.dumps(event.get('metadata', {})),
+                    'created_at': datetime.utcnow()
+                }]
+                store_sensor_data_delta(delta_data)
+                logger.debug(f"Stored sensor data in Delta Lake: {event['event_id']}")
+            except Exception as e:
+                logger.warning(f"Error storing in Delta Lake: {e}")
+        
         # Shkruaj në Hybrid Storage (PostgreSQL + Cassandra) - 100% HYBRID STORAGE MODELS
         if HYBRID_STORAGE_AVAILABLE:
             try:
@@ -382,6 +415,24 @@ def _process_meter_reading_internal(event: Dict[str, Any]):
         
         conn.commit()
         logger.debug(f"Processed meter reading: {event['event_id']}")
+        
+        # Shkruaj në Delta Lake (Data Lakehouse) - 100% DATA LAKEHOUSE
+        if DELTA_LAKE_AVAILABLE:
+            try:
+                # Përgatit të dhëna për Delta Lake
+                delta_data = [{
+                    'event_id': event['event_id'],
+                    'meter_id': event['meter_id'],
+                    'customer_id': event['customer_id'],
+                    'reading': float(event['reading']),
+                    'unit': event.get('unit', 'kWh'),
+                    'timestamp': datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00')),
+                    'created_at': datetime.utcnow()
+                }]
+                store_meter_readings_delta(delta_data)
+                logger.debug(f"Stored meter reading in Delta Lake: {event['event_id']}")
+            except Exception as e:
+                logger.warning(f"Error storing in Delta Lake: {e}")
         
         # Shkruaj në Hybrid Storage (PostgreSQL + Cassandra) - 100% HYBRID STORAGE MODELS
         if HYBRID_STORAGE_AVAILABLE:
