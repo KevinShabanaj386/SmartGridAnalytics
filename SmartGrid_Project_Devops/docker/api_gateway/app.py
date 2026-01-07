@@ -247,16 +247,45 @@ def health_check():
                 'error': str(e)
             }
     
+    healthy_count = sum(1 for s in services_health.values() if s.get('status') == 'healthy')
+    unhealthy_count = len(services_health) - healthy_count
+    overall_status = 'healthy' if unhealthy_count == 0 else 'degraded' if healthy_count > 0 else 'unhealthy'
+    
     return jsonify({
-        'status': 'healthy',
+        'status': overall_status,
         'service': 'api-gateway',
         'timestamp': datetime.utcnow().isoformat(),
         'services': services_health,
+        'summary': {
+            'total': len(SERVICE_FALLBACKS),
+            'healthy': healthy_count,
+            'unhealthy': unhealthy_count
+        },
         'circuit_breakers': {
             name: state['status'] 
             for name, state in circuit_breaker_state.items()
         }
-    }), 200
+    }), 200 if overall_status == 'healthy' else 503 if overall_status == 'unhealthy' else 200
+
+@app.route('/metrics', methods=['GET'])
+def metrics():
+    """Prometheus metrics endpoint"""
+    try:
+        from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+        return Response(
+            generate_latest(),
+            mimetype=CONTENT_TYPE_LATEST
+        )
+    except ImportError:
+        # Fallback nëse prometheus_client nuk është i instaluar
+        return jsonify({
+            'requests_total': 0,
+            'requests_duration_seconds': 0,
+            'circuit_breaker_state': {
+                name: state['status']
+                for name, state in circuit_breaker_state.items()
+            }
+        }), 200
 
 # Routing për Data Ingestion Service
 @app.route('/api/v1/ingest/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE'])
