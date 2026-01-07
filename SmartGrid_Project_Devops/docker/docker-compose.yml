@@ -203,6 +203,20 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
 
+  # MongoDB për hybrid storage - audit logs dhe metadata (kërkesë e profesorit)
+  mongodb:
+    image: mongo:7.0
+    container_name: smartgrid-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: smartgrid
+      MONGO_INITDB_ROOT_PASSWORD: smartgrid123
+      MONGO_INITDB_DATABASE: smartgrid_audit
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+
   # Mikrosherbimet
   data-ingestion-service:
     build: ./data-ingestion-service
@@ -280,8 +294,15 @@ services:
       - POSTGRES_USER=smartgrid
       - POSTGRES_PASSWORD=smartgrid123
       - JWT_SECRET=your-secret-key-change-in-production
+      - MONGODB_HOST=smartgrid-mongodb
+      - MONGODB_PORT=27017
+      - MONGODB_DB=smartgrid_audit
+      - MONGODB_USER=smartgrid
+      - MONGODB_PASSWORD=smartgrid123
+      - USE_MONGODB_AUDIT=true
     depends_on:
       - postgres
+      - mongodb
     restart: unless-stopped
 
   api-gateway:
@@ -412,3 +433,4 @@ volumes:
   sonarqube_data:
   sonarqube_extensions:
   sonarqube_logs:
+  mongodb_data:

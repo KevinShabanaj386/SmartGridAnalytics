@@ -30,7 +30,7 @@ except ImportError:
     pass
     OAUTH2_AVAILABLE = False
 
-# Import Audit Logs module
+# Import Audit Logs module (PostgreSQL)
 try:
     from audit_logs import create_audit_log, init_audit_logs_table
     AUDIT_LOGS_AVAILABLE = True
@@ -52,6 +52,19 @@ except ImportError:
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Import MongoDB Audit Logs module (Hybrid Storage) - after logger initialization
+try:
+    from mongodb_audit import init_mongodb, create_audit_log_mongodb
+    MONGODB_AUDIT_AVAILABLE = init_mongodb()
+    if MONGODB_AUDIT_AVAILABLE:
+        logger.info("MongoDB audit logs enabled")
+except ImportError:
+    MONGODB_AUDIT_AVAILABLE = False
+    logger.warning("MongoDB audit logs not available")
+except Exception as e:
+    MONGODB_AUDIT_AVAILABLE = False
+    logger.warning(f"Could not initialize MongoDB audit logs: {e}")
 
 # Vault Secrets Management
 try:
@@ -356,21 +369,40 @@ def login():
         cursor.close()
         conn.close()
         
-        # Log successful login (Immutable Audit Logs - kërkesë e profesorit)
+        # Log successful login - Hybrid Storage (PostgreSQL + MongoDB)
+        audit_data = {
+            'event_type': 'user_login',
+            'action': 'login_success',
+            'user_id': user['id'],
+            'username': user['username'],
+            'ip_address': request.remote_addr,
+            'user_agent': request.headers.get('User-Agent'),
+            'request_method': request.method,
+            'request_path': request.path,
+            'response_status': 200
+        }
         if AUDIT_LOGS_AVAILABLE:
-            create_audit_log(
-                event_type='user_login',
-                action='login_success',
-                user_id=user['id'],
-                username=user['username'],
-                ip_address=request.remote_addr,
-                user_agent=request.headers.get('User-Agent'),
-                request_method=request.method,
-                request_path=request.path,
-                response_status=200
-            )
+            create_audit_log(**audit_data)
+        if MONGODB_AUDIT_AVAILABLE:
+            create_audit_log_mongodb(**audit_data)
         
-        return jsonify({
+        # Behavioral Analytics - detektim anomalish
+        behavioral_warning = None
+        if BEHAVIORAL_ANALYTICS_AVAILABLE:
+            try:
+                # get_user_behavior_features merr vetëm user_id dhe days (default 30)
+                features = get_user_behavior_features(user['id'], days=30)
+                anomalies = detect_behavioral_anomalies(user['id'], features)
+                if anomalies:
+                    behavioral_warning = {
+                        'risk_score': calculate_user_risk_score(user['id']),
+                        'anomalies': anomalies
+                    }
+            except Exception as e:
+                logger.warning(f"Behavioral analytics error: {e}")
+        
+        # Krijo response
+        response_data = {
             'status': 'success',
             'token': token,
             'token_type': 'Bearer',
