@@ -15,6 +15,14 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Setup Swagger UI
+try:
+    from swagger_ui import setup_swagger_ui
+    if setup_swagger_ui(app):
+        logger.info("Swagger UI initialized at /api-docs")
+except Exception as e:
+    logger.warning(f"Could not initialize Swagger UI: {e}")
+
 # Setup OpenTelemetry tracing
 try:
     from tracing import setup_tracing

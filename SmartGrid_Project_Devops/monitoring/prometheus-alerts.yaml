@@ -1,0 +1,97 @@
+# Prometheus Alerting Rules për Smart Grid Analytics
+
+groups:
+- name: smartgrid_alerts
+  interval: 30s
+  rules:
+  # High Error Rate
+  - alert: HighErrorRate
+    expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+    for: 5m
+    labels:
+      severity: warning
+      service: api-gateway
+    annotations:
+      summary: "High error rate detected"
+      description: "Error rate is {{ $value }} errors per second for {{ $labels.service }}"
+  
+  # Service Down
+  - alert: ServiceDown
+    expr: up{job=~"smartgrid-.*"} == 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Service {{ $labels.job }} is down"
+      description: "Service {{ $labels.job }} has been down for more than 2 minutes"
+  
+  # High Response Time
+  - alert: HighResponseTime
+    expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High response time detected"
+      description: "95th percentile response time is {{ $value }} seconds"
+  
+  # High CPU Usage
+  - alert: HighCPUUsage
+    expr: rate(container_cpu_usage_seconds_total[5m]) > 0.8
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High CPU usage"
+      description: "CPU usage is {{ $value }} for {{ $labels.pod }}"
+  
+  # High Memory Usage
+  - alert: HighMemoryUsage
+    expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) > 0.9
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High memory usage"
+      description: "Memory usage is {{ $value }}% for {{ $labels.pod }}"
+  
+  # Kafka Consumer Lag
+  - alert: KafkaConsumerLag
+    expr: kafka_consumer_lag_sum > 10000
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High Kafka consumer lag"
+      description: "Kafka consumer lag is {{ $value }} messages"
+  
+  # Database Connection Pool Exhausted
+  - alert: DatabaseConnectionPoolExhausted
+    expr: pg_stat_database_numbackends / pg_stat_database_max_connections > 0.9
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Database connection pool nearly exhausted"
+      description: "{{ $value }}% of database connections are in use"
+  
+  # Disk Space Low
+  - alert: DiskSpaceLow
+    expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Low disk space"
+      description: "Disk space is below 10% for {{ $labels.instance }}"
+  
+  # Circuit Breaker Open
+  - alert: CircuitBreakerOpen
+    expr: circuit_breaker_state{status="open"} == 1
+    for: 1m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Circuit breaker is open"
+      description: "Circuit breaker for {{ $labels.service }} is open"
+

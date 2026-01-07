@@ -1,0 +1,82 @@
+# Grafana Alerting Configuration për Smart Grid Analytics
+
+# Kjo file përmban shembuj të alert rules për Grafana
+# Alert rules mund të konfigurohen edhe përmes Grafana UI
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-alert-rules
+  namespace: smartgrid
+data:
+  smartgrid-alerts.yaml: |
+    groups:
+      - name: smartgrid_alerts
+        interval: 30s
+        rules:
+          - uid: high_error_rate
+            title: High Error Rate
+            condition: A
+            data:
+              - refId: A
+                queryType: ""
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+                  refId: A
+            noDataState: NoData
+            execErrState: Alerting
+            for: 5m
+            annotations:
+              summary: "High error rate detected"
+              description: "Error rate is above 5%"
+            labels:
+              severity: warning
+          
+          - uid: service_down
+            title: Service Down
+            condition: A
+            data:
+              - refId: A
+                queryType: ""
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: up{job=~"smartgrid-.*"} == 0
+                  refId: A
+            noDataState: NoData
+            execErrState: Alerting
+            for: 2m
+            annotations:
+              summary: "Service is down"
+              description: "Service {{ $labels.job }} is down"
+            labels:
+              severity: critical
+          
+          - uid: high_response_time
+            title: High Response Time
+            condition: A
+            data:
+              - refId: A
+                queryType: ""
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+                  refId: A
+            noDataState: NoData
+            execErrState: Alerting
+            for: 5m
+            annotations:
+              summary: "High response time"
+              description: "95th percentile response time is above 2 seconds"
+            labels:
+              severity: warning
+

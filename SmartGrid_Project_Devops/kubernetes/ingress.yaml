@@ -1,0 +1,68 @@
+# Kubernetes Ingress për Smart Grid Analytics
+# Ingress përcakton routing për external traffic
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: smartgrid-ingress
+  namespace: smartgrid
+  annotations:
+    # NGINX Ingress Controller annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    # CORS
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type"
+    # Client body size
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # Timeouts
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - api.smartgrid.local
+    - dashboard.smartgrid.local
+    secretName: smartgrid-tls-cert
+  rules:
+  # API Gateway
+  - host: api.smartgrid.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway
+            port:
+              number: 5000
+  # Frontend Dashboard
+  - host: dashboard.smartgrid.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 8080
+  # Swagger UI
+  - host: api.smartgrid.local
+    http:
+      paths:
+      - path: /api-docs
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway
+            port:
+              number: 5000
+
