@@ -20,10 +20,21 @@ PRICE_SOURCES = [
 
 
 def generate_price_snapshot() -> dict:
-    """Generate a simulated snapshot of electricity prices in €/kWh."""
-    base_price = random.uniform(0.06, 0.12)  # average price range
+    """Generate a simulated snapshot of electricity prices in €/kWh.
+
+    Includes import-related metrics and simple trend signals so the
+    dashboard can show how import prices are changing.
+    """
+    base_price = random.uniform(0.06, 0.12)  # average price range (€/kWh)
     peak_multiplier = random.uniform(1.1, 1.4)
     offpeak_multiplier = random.uniform(0.6, 0.9)
+
+    # Simulate import vs. domestic prices (€/MWh) and trends
+    import_price_eur_per_mwh = round(base_price * 1000 * random.uniform(1.05, 1.3), 2)
+    domestic_price_eur_per_mwh = round(base_price * 1000 * random.uniform(0.9, 1.1), 2)
+    change_24h_percent = round(random.uniform(-5, 15), 2)   # -5% to +15%
+    change_7d_percent = round(random.uniform(-10, 30), 2)  # -10% to +30%
+    import_share_percent = round(random.uniform(30, 70), 1)
 
     prices = {
         "base": {
@@ -44,6 +55,11 @@ def generate_price_snapshot() -> dict:
         "source": random.choice(PRICE_SOURCES),
         "scraped_at": datetime.utcnow().isoformat(),
         "prices": prices,
+        "import_price_eur_per_mwh": import_price_eur_per_mwh,
+        "domestic_price_eur_per_mwh": domestic_price_eur_per_mwh,
+        "import_share_percent": import_share_percent,
+        "change_24h_percent": change_24h_percent,
+        "change_7d_percent": change_7d_percent,
     }
 
 
