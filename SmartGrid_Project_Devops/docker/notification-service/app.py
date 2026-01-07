@@ -103,19 +103,64 @@ def send_notification():
         # Për tani, vetëm loggojmë dhe dërgojmë në Kafka
         logger.info(f"Sending {notification['type']} notification to {notification['recipient']}")
         
-        # Simulim i dërgimit
+        # Dërgo notification bazuar në type
         if notification['type'] == 'email':
-            # Simulim email sending
+            # Email sending (existing implementation)
             notification['status'] = 'sent'
             logger.info(f"Email sent to {notification['recipient']}")
         elif notification['type'] == 'sms':
-            # Simulim SMS sending
-            notification['status'] = 'sent'
-            logger.info(f"SMS sent to {notification['recipient']}")
+            # SMS sending me SMS handler (ADVANCED ANALYTICS)
+            try:
+                from sms_handler import send_sms
+                sms_result = send_sms(
+                    to_phone=notification['recipient'],
+                    message=notification['message']
+                )
+                notification['status'] = sms_result.get('status', 'sent')
+                notification['delivery_details'] = sms_result
+                logger.info(f"SMS sent to {notification['recipient']}: {sms_result.get('status')}")
+            except ImportError:
+                # Fallback nëse SMS handler nuk është i disponueshëm
+                notification['status'] = 'sent'
+                logger.info(f"SMS sent to {notification['recipient']} (simulated)")
         elif notification['type'] == 'webhook':
-            # Në prodhim, do të bëhej HTTP POST në webhook URL
-            notification['status'] = 'sent'
-            logger.info(f"Webhook notification sent to {notification['recipient']}")
+            # Webhook sending me webhook handler (ADVANCED ANALYTICS)
+            try:
+                from webhook_handler import send_webhook
+                webhook_result = send_webhook(
+                    url=notification['recipient'],
+                    payload={
+                        'subject': notification.get('subject', ''),
+                        'message': notification['message'],
+                        'priority': notification.get('priority', 'medium'),
+                        'timestamp': notification['timestamp']
+                    }
+                )
+                notification['status'] = webhook_result.get('status', 'sent')
+                notification['delivery_details'] = webhook_result
+                logger.info(f"Webhook sent to {notification['recipient']}: {webhook_result.get('status')}")
+            except ImportError:
+                # Fallback nëse webhook handler nuk është i disponueshëm
+                notification['status'] = 'sent'
+                logger.info(f"Webhook sent to {notification['recipient']} (simulated)")
+        elif notification['type'] == 'push':
+            # Push notification me push handler (ADVANCED ANALYTICS)
+            try:
+                from push_notification_handler import send_push_notification
+                push_result = send_push_notification(
+                    device_token=notification['recipient'],
+                    title=notification.get('subject', 'Smart Grid Alert'),
+                    body=notification['message'],
+                    platform=notification.get('platform', 'fcm'),
+                    data=notification.get('data')
+                )
+                notification['status'] = push_result.get('status', 'sent')
+                notification['delivery_details'] = push_result
+                logger.info(f"Push notification sent: {push_result.get('status')}")
+            except ImportError:
+                # Fallback nëse push handler nuk është i disponueshëm
+                notification['status'] = 'sent'
+                logger.info(f"Push notification sent (simulated)")
         
         # Dërgo në Kafka për audit
         producer = get_producer()
