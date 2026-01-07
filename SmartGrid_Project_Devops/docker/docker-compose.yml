@@ -385,6 +385,21 @@ services:
       - kafka
     restart: unless-stopped
 
+  # Kosovo Weather Data Collector - Real weather data për qytetet e Kosovës (AI-powered)
+  kosovo-weather-collector:
+    build: ./kosovo-weather-collector
+    container_name: smartgrid-kosovo-weather
+    ports:
+      - "5007:5007"
+    environment:
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY:-}
+      - KAFKA_BROKER=smartgrid-kafka:9092
+      - KAFKA_TOPIC_WEATHER=smartgrid-weather-data
+      - COLLECTION_INTERVAL=3600  # 1 orë default
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
   # Apache Spark Structured Streaming Service (bazuar në Real-Time Energy Monitoring System)
   # Temporarily disabled - Spark image version issue
   # spark-streaming:
