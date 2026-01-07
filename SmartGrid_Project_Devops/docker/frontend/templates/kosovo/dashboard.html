@@ -7,6 +7,29 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="/static/css/modern-style.css?v=2.0">
     <link rel="stylesheet" href="/static/css/kosovo.css">
+    <style>
+        .service-status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+        .service-status.info {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 3px solid #3b82f6;
+            color: #3b82f6;
+        }
+        .service-status.warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-left: 3px solid #f59e0b;
+            color: #f59e0b;
+        }
+        .service-status.error {
+            background: rgba(239, 68, 68, 0.1);
+            border-left: 3px solid #ef4444;
+            color: #ef4444;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -22,6 +45,11 @@
         </div>
         
         <main>
+            <!-- Service Status Info -->
+            <div id="serviceStatus" class="service-status info" style="display: none;">
+                <strong>ℹ️ Info:</strong> <span id="statusMessage"></span>
+            </div>
+            
             <!-- Quick Stats -->
             <div class="stats-grid" id="kosovoStats">
                 <div class="stat-card">

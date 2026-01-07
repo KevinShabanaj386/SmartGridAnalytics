@@ -5,78 +5,147 @@ let refreshInterval = null;
 // Load all Kosovo data
 async function loadKosovoDashboard() {
     try {
-        await Promise.all([
+        const results = await Promise.allSettled([
             loadWeatherSummary(),
             loadPricesSummary(),
             loadConsumptionSummary()
         ]);
+        
+        // Check for service status
+        let servicesDown = 0;
+        results.forEach((result, index) => {
+            if (result.status === 'rejected') {
+                servicesDown++;
+            }
+        });
+        
+        // Show status message if services are down
+        const statusEl = document.getElementById('serviceStatus');
+        const statusMsg = document.getElementById('statusMessage');
+        
+        if (servicesDown > 0 && statusEl && statusMsg) {
+            statusEl.style.display = 'block';
+            statusEl.className = 'service-status warning';
+            statusMsg.textContent = `${servicesDown} shërbim(e) nuk janë të disponueshme. Kontrolloni që Kosovo collectors janë running.`;
+        } else if (statusEl) {
+            statusEl.style.display = 'none';
+        }
     } catch (error) {
         console.error('Error loading Kosovo dashboard:', error);
+        const statusEl = document.getElementById('serviceStatus');
+        const statusMsg = document.getElementById('statusMessage');
+        if (statusEl && statusMsg) {
+            statusEl.style.display = 'block';
+            statusEl.className = 'service-status error';
+            statusMsg.textContent = `Gabim: ${error.message}`;
+        }
     }
 }
 
 // Load weather summary
 async function loadWeatherSummary() {
+    const container = document.getElementById('weatherSummary');
+    if (!container) return;
+    
     try {
         const response = await fetch('/api/kosovo/weather');
-        const data = await response.json();
         
-        if (data.status === 'success' && data.data && data.data.length > 0) {
-            const weatherData = data.data;
-            const container = document.getElementById('weatherSummary');
-            
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Weather API response:', data);
+        
+        // Handle different response formats
+        let weatherData = [];
+        if (data.status === 'success' && data.data) {
+            weatherData = Array.isArray(data.data) ? data.data : [data.data];
+        } else if (Array.isArray(data)) {
+            weatherData = data;
+        } else if (data.cities_collected && data.data) {
+            weatherData = Array.isArray(data.data) ? data.data : [data.data];
+        }
+        
+        if (weatherData.length > 0) {
             // Calculate average temperature
-            const avgTemp = weatherData.reduce((sum, w) => sum + (w.temperature || 0), 0) / weatherData.length;
-            document.getElementById('avgTemperature').textContent = `${avgTemp.toFixed(1)}°C`;
-            document.getElementById('citiesCount').textContent = weatherData.length;
+            const avgTemp = weatherData.reduce((sum, w) => sum + (parseFloat(w.temperature) || 0), 0) / weatherData.length;
+            const avgTempEl = document.getElementById('avgTemperature');
+            const citiesCountEl = document.getElementById('citiesCount');
+            
+            if (avgTempEl) avgTempEl.textContent = `${avgTemp.toFixed(1)}°C`;
+            if (citiesCountEl) citiesCountEl.textContent = weatherData.length;
             
             // Display summary
             container.innerHTML = weatherData.slice(0, 3).map(w => `
                 <div class="city-weather-item">
                     <div>
-                        <strong>${w.city_name || w.city}</strong>
+                        <strong>${w.city_name || w.city || 'Unknown'}</strong>
                         <span class="source-badge">${w.data_source || 'API'}</span>
                     </div>
                     <div style="text-align: right;">
-                        <div style="font-size: 1.2rem; font-weight: bold;">${w.temperature}°C</div>
+                        <div style="font-size: 1.2rem; font-weight: bold;">${w.temperature || 'N/A'}°C</div>
                         <small>${w.weather_condition || 'N/A'}</small>
                     </div>
                 </div>
             `).join('');
         } else {
-            document.getElementById('weatherSummary').innerHTML = '<p>Nuk ka të dhëna të disponueshme</p>';
+            container.innerHTML = '<p style="color: #f59e0b;">⚠️ Nuk ka të dhëna të disponueshme. Shërbimi mund të mos jetë aktiv.</p>';
         }
     } catch (error) {
         console.error('Error loading weather:', error);
-        document.getElementById('weatherSummary').innerHTML = '<p style="color: #ef4444;">Gabim në ngarkim</p>';
+        container.innerHTML = `<p style="color: #ef4444;">❌ Gabim: ${error.message || 'Service unavailable'}</p>`;
     }
 }
 
 // Load prices summary
 async function loadPricesSummary() {
+    const container = document.getElementById('pricesSummary');
+    if (!container) return;
+    
     try {
         const response = await fetch('/api/kosovo/prices');
-        const data = await response.json();
         
-        if (data.status === 'success' && data.data && data.data.length > 0) {
-            const container = document.getElementById('pricesSummary');
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Prices API response:', data);
+        
+        // Handle different response formats
+        let sources = [];
+        if (data.status === 'success' && data.data) {
+            sources = Array.isArray(data.data) ? data.data : [data.data];
+        } else if (Array.isArray(data)) {
+            sources = data;
+        } else if (data.sources_collected && data.data) {
+            sources = Array.isArray(data.data) ? data.data : [data.data];
+        }
+        
+        if (sources.length > 0) {
             let allPrices = [];
             
-            data.data.forEach(source => {
-                if (source.prices) {
+            sources.forEach(source => {
+                if (source.prices && typeof source.prices === 'object') {
                     Object.entries(source.prices).forEach(([type, priceInfo]) => {
-                        allPrices.push({
-                            source: source.source,
-                            type: type,
-                            price: priceInfo.price_eur_per_kwh
-                        });
+                        if (priceInfo && priceInfo.price_eur_per_kwh) {
+                            allPrices.push({
+                                source: source.source || 'Unknown',
+                                type: type,
+                                price: parseFloat(priceInfo.price_eur_per_kwh)
+                            });
+                        }
                     });
                 }
             });
             
             if (allPrices.length > 0) {
                 const avgPrice = allPrices.reduce((sum, p) => sum + p.price, 0) / allPrices.length;
-                document.getElementById('avgPrice').textContent = `${avgPrice.toFixed(4)} €/kWh`;
+                const avgPriceEl = document.getElementById('avgPrice');
+                if (avgPriceEl) avgPriceEl.textContent = `${avgPrice.toFixed(4)} €/kWh`;
                 
                 container.innerHTML = allPrices.slice(0, 3).map(p => `
                     <div class="price-item">
@@ -85,14 +154,14 @@ async function loadPricesSummary() {
                     </div>
                 `).join('');
             } else {
-                container.innerHTML = '<p>Nuk ka çmime të disponueshme</p>';
+                container.innerHTML = '<p style="color: #f59e0b;">⚠️ Nuk ka çmime të disponueshme. Shërbimi mund të mos jetë aktiv.</p>';
             }
         } else {
-            document.getElementById('pricesSummary').innerHTML = '<p>Nuk ka të dhëna të disponueshme</p>';
+            container.innerHTML = '<p style="color: #f59e0b;">⚠️ Nuk ka të dhëna të disponueshme. Shërbimi mund të mos jetë aktiv.</p>';
         }
     } catch (error) {
         console.error('Error loading prices:', error);
-        document.getElementById('pricesSummary').innerHTML = '<p style="color: #ef4444;">Gabim në ngarkim</p>';
+        container.innerHTML = `<p style="color: #ef4444;">❌ Gabim: ${error.message || 'Service unavailable'}</p>`;
     }
 }
 
@@ -100,21 +169,39 @@ async function loadPricesSummary() {
 async function loadConsumptionSummary() {
     try {
         const response = await fetch('/api/kosovo/consumption');
-        const data = await response.json();
         
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Consumption API response:', data);
+        
+        // Handle different response formats
+        let consumption = null;
         if (data.status === 'success' && data.data) {
-            const consumption = data.data;
-            const total = consumption.total_consumption_mw;
+            consumption = data.data;
+        } else if (data.total_consumption_mw) {
+            consumption = data;
+        }
+        
+        if (consumption && consumption.total_consumption_mw) {
+            const total = parseFloat(consumption.total_consumption_mw);
+            const totalEl = document.getElementById('totalConsumption');
+            if (totalEl) totalEl.textContent = `${total} MW`;
             
-            if (total) {
-                document.getElementById('totalConsumption').textContent = `${total} MW`;
-                
-                // Update chart
-                updateConsumptionChart(consumption);
-            }
+            // Update chart
+            updateConsumptionChart(consumption);
+        } else {
+            const totalEl = document.getElementById('totalConsumption');
+            if (totalEl) totalEl.textContent = 'N/A';
+            console.warn('No consumption data available');
         }
     } catch (error) {
         console.error('Error loading consumption:', error);
+        const totalEl = document.getElementById('totalConsumption');
+        if (totalEl) totalEl.textContent = 'Error';
     }
 }
 

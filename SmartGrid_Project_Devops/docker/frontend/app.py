@@ -286,23 +286,41 @@ def get_kosovo_weather():
     """Merr të dhëna moti për Kosovën"""
     try:
         # Try configured URL first
-        response = requests.get(f'{KOSOVO_WEATHER_URL}/api/v1/collect', timeout=5)
-        if response.status_code == 200:
-            return jsonify(response.json())
-        else:
-            return jsonify({'error': 'Failed to fetch weather data'}), response.status_code
-    except requests.exceptions.RequestException:
+        try:
+            response = requests.get(f'{KOSOVO_WEATHER_URL}/api/v1/collect', timeout=5)
+            if response.status_code == 200:
+                result = response.json()
+                # Ensure consistent format
+                if 'status' not in result:
+                    result = {'status': 'success', 'data': result.get('data', result)}
+                return jsonify(result)
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Failed to connect to {KOSOVO_WEATHER_URL}: {e}")
+        
         # Fallback: try localhost
         try:
             response = requests.get('http://localhost:5007/api/v1/collect', timeout=5)
             if response.status_code == 200:
-                return jsonify(response.json())
-        except:
-            pass
-        return jsonify({'error': 'Weather service unavailable', 'status': 'service_down'}), 503
+                result = response.json()
+                if 'status' not in result:
+                    result = {'status': 'success', 'data': result.get('data', result)}
+                return jsonify(result)
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Failed to connect to localhost:5007: {e}")
+        
+        # Return error with helpful message
+        return jsonify({
+            'status': 'error',
+            'error': 'Weather service unavailable. Please ensure kosovo-weather-collector is running on port 5007.',
+            'service_down': True
+        }), 503
+        
     except Exception as e:
         logger.error(f"Error fetching Kosovo weather: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
 
 @app.route('/api/kosovo/weather/cities', methods=['GET'])
 def get_kosovo_weather_cities():
@@ -328,43 +346,81 @@ def get_kosovo_weather_cities():
 def get_kosovo_prices():
     """Merr çmimet e energjisë për Kosovën"""
     try:
-        response = requests.get(f'{KOSOVO_PRICE_URL}/api/v1/prices/latest', timeout=5)
-        if response.status_code == 200:
-            return jsonify(response.json())
-        else:
-            return jsonify({'error': 'Failed to fetch prices'}), response.status_code
-    except requests.exceptions.RequestException:
+        # Try configured URL first
+        try:
+            response = requests.get(f'{KOSOVO_PRICE_URL}/api/v1/prices/latest', timeout=5)
+            if response.status_code == 200:
+                result = response.json()
+                if 'status' not in result:
+                    result = {'status': 'success', 'data': result.get('data', result)}
+                return jsonify(result)
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Failed to connect to {KOSOVO_PRICE_URL}: {e}")
+        
+        # Fallback: try localhost
         try:
             response = requests.get('http://localhost:5008/api/v1/prices/latest', timeout=5)
             if response.status_code == 200:
-                return jsonify(response.json())
-        except:
-            pass
-        return jsonify({'error': 'Price service unavailable', 'status': 'service_down'}), 503
+                result = response.json()
+                if 'status' not in result:
+                    result = {'status': 'success', 'data': result.get('data', result)}
+                return jsonify(result)
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Failed to connect to localhost:5008: {e}")
+        
+        # Return error with helpful message
+        return jsonify({
+            'status': 'error',
+            'error': 'Price service unavailable. Please ensure kosovo-energy-price-collector is running on port 5008.',
+            'service_down': True
+        }), 503
+        
     except Exception as e:
         logger.error(f"Error fetching Kosovo prices: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
 
 @app.route('/api/kosovo/consumption', methods=['GET'])
 def get_kosovo_consumption():
     """Merr konsumin e energjisë për Kosovën"""
     try:
-        response = requests.get(f'{KOSOVO_CONSUMPTION_URL}/api/v1/consumption/latest', timeout=5)
-        if response.status_code == 200:
-            return jsonify(response.json())
-        else:
-            return jsonify({'error': 'Failed to fetch consumption'}), response.status_code
-    except requests.exceptions.RequestException:
+        # Try configured URL first
+        try:
+            response = requests.get(f'{KOSOVO_CONSUMPTION_URL}/api/v1/consumption/latest', timeout=5)
+            if response.status_code == 200:
+                result = response.json()
+                if 'status' not in result:
+                    result = {'status': 'success', 'data': result.get('data', result)}
+                return jsonify(result)
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Failed to connect to {KOSOVO_CONSUMPTION_URL}: {e}")
+        
+        # Fallback: try localhost
         try:
             response = requests.get('http://localhost:5009/api/v1/consumption/latest', timeout=5)
             if response.status_code == 200:
-                return jsonify(response.json())
-        except:
-            pass
-        return jsonify({'error': 'Consumption service unavailable', 'status': 'service_down'}), 503
+                result = response.json()
+                if 'status' not in result:
+                    result = {'status': 'success', 'data': result.get('data', result)}
+                return jsonify(result)
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Failed to connect to localhost:5009: {e}")
+        
+        # Return error with helpful message
+        return jsonify({
+            'status': 'error',
+            'error': 'Consumption service unavailable. Please ensure kosovo-consumption-collector is running on port 5009.',
+            'service_down': True
+        }), 503
+        
     except Exception as e:
         logger.error(f"Error fetching Kosovo consumption: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
 
 @app.route('/api/kosovo/consumption/historical', methods=['GET'])
 def get_kosovo_consumption_historical():
