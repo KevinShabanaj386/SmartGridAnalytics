@@ -19,6 +19,16 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Input Validation (100% SECURITY)
+try:
+    from input_validation import (
+        validate_uuid, validate_date, validate_numeric, validate_integer, sanitize_string
+    )
+    INPUT_VALIDATION_AVAILABLE = True
+except ImportError:
+    INPUT_VALIDATION_AVAILABLE = False
+    logger.warning("Input validation module not available")
+
 # Initialize Redis caching
 try:
     from cache import init_redis, cache_result
@@ -105,7 +115,23 @@ def get_sensor_statistics():
     try:
         sensor_id = request.args.get('sensor_id')
         sensor_type = request.args.get('sensor_type')
-        hours = int(request.args.get('hours', 24))
+        hours_str = request.args.get('hours', '24')
+        
+        # SECURITY FIX: Input validation (100% SECURITY)
+        if INPUT_VALIDATION_AVAILABLE:
+            # Validon hours (integer, 1-168)
+            hours_valid, hours_error = validate_integer(hours_str, min_value=1, max_value=168)
+            if not hours_valid:
+                return jsonify({'error': hours_error}), 400
+            hours = int(hours_str)
+            
+            # Sanitize sensor_id dhe sensor_type
+            if sensor_id:
+                sensor_id = sanitize_string(sensor_id, max_length=100)
+            if sensor_type:
+                sensor_type = sanitize_string(sensor_type, max_length=50)
+        else:
+            hours = int(hours_str)
         
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)

@@ -4,6 +4,7 @@ Zero Trust Architecture Implementation për API Gateway
 """
 import logging
 import time
+import os
 from typing import Dict, Optional, Tuple
 from functools import wraps
 from flask import request, jsonify
@@ -11,6 +12,20 @@ import jwt
 import requests
 
 logger = logging.getLogger(__name__)
+
+# JWT Secret - Merr nga Vault ose environment variable
+def get_jwt_secret() -> str:
+    """Merr JWT secret nga Vault ose environment variable"""
+    try:
+        from vault_client import get_jwt_secret as vault_get_jwt_secret
+        secret = vault_get_jwt_secret()
+        if secret:
+            return secret
+    except ImportError:
+        pass
+    
+    # Fallback në environment variable
+    return os.getenv('JWT_SECRET', 'your-secret-key-change-in-production')
 
 # Zero Trust Configuration
 ZERO_TRUST_CONFIG = {
@@ -46,16 +61,15 @@ def verify_jwt_token_strict(token: str) -> Tuple[bool, Optional[Dict]]:
             logger.warning("Invalid JWT token format")
             return False, None
         
-        # Decode token (pa verification për tani, në prodhim përdor secret)
-        # Në prodhim, verifiko me secret nga Vault
+        # Verifiko token me signature verification (SECURITY FIX)
         try:
-            decoded = jwt.decode(token, options={"verify_signature": False})
-            
-            # Verifikon expiration
-            if 'exp' in decoded:
-                if time.time() > decoded['exp']:
-                    logger.warning("JWT token expired")
-                    return False, None
+            jwt_secret = get_jwt_secret()
+            decoded = jwt.decode(
+                token, 
+                jwt_secret, 
+                algorithms=['HS256'],
+                options={"verify_signature": True, "verify_exp": True, "verify_iat": True}
+            )
             
             # Verifikon required claims
             required_claims = ['sub', 'iat']
