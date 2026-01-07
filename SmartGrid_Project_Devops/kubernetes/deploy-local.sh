@@ -10,21 +10,48 @@ NAMESPACE="smartgrid"
 echo "=== Kubernetes Deployment ==="
 echo ""
 
-# Check if KUBECONFIG is set
+# Check if KUBECONFIG is set or if we can use default context
 if [ -z "$KUBECONFIG" ]; then
-    echo "❌ Error: KUBECONFIG environment variable is not set"
+    # Try to use default context
+    CURRENT_CONTEXT=$(kubectl config current-context 2>/dev/null || echo "")
+    if [ -z "$CURRENT_CONTEXT" ]; then
+        echo "❌ Error: No Kubernetes context found"
+        echo ""
+        echo "Please set KUBECONFIG or configure a kubectl context:"
+        echo "  export KUBECONFIG=/path/to/kubeconfig"
+        echo "  kubectl config use-context <your-context>"
+        exit 1
+    else
+        echo "ℹ️  Using default kubectl context: $CURRENT_CONTEXT"
+        echo ""
+    fi
+else
+    echo "ℹ️  Using KUBECONFIG: $KUBECONFIG"
     echo ""
-    echo "Please set KUBECONFIG to point to your cluster configuration:"
-    echo "  export KUBECONFIG=/path/to/kubeconfig"
-    echo ""
-    echo "Or if using kubectl context:"
-    echo "  kubectl config use-context <your-context>"
-    exit 1
 fi
 
 # Check if kubectl can connect to cluster
 echo "Checking cluster connection..."
 if ! kubectl cluster-info > /dev/null 2>&1; then
+    # Try with explicit context if default failed
+    CURRENT_CONTEXT=$(kubectl config current-context 2>/dev/null || echo "")
+    if [ -n "$CURRENT_CONTEXT" ]; then
+        echo "Trying with context: $CURRENT_CONTEXT"
+        if kubectl --context="$CURRENT_CONTEXT" cluster-info > /dev/null 2>&1; then
+            echo "✅ Connected using context: $CURRENT_CONTEXT"
+            KUBECTL_CMD="kubectl --context=$CURRENT_CONTEXT"
+        else
+            KUBECTL_CMD="kubectl"
+        fi
+    else
+        KUBECTL_CMD="kubectl"
+    fi
+else
+    KUBECTL_CMD="kubectl"
+fi
+
+# Final check
+if ! $KUBECTL_CMD cluster-info > /dev/null 2>&1; then
     echo "❌ Error: Cannot connect to Kubernetes cluster"
     echo ""
     echo "Please verify:"
@@ -37,11 +64,11 @@ if ! kubectl cluster-info > /dev/null 2>&1; then
 fi
 
 echo "✅ Connected to cluster"
-kubectl cluster-info | head -1
+$KUBECTL_CMD cluster-info | head -1
 echo ""
 
 # Get current context
-CURRENT_CONTEXT=$(kubectl config current-context 2>/dev/null || echo "unknown")
+CURRENT_CONTEXT=$($KUBECTL_CMD config current-context 2>/dev/null || echo "unknown")
 echo "Current context: $CURRENT_CONTEXT"
 echo ""
 
@@ -55,7 +82,7 @@ fi
 
 # Create namespace if it doesn't exist
 echo "Creating namespace '$NAMESPACE' (if needed)..."
-kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - || {
+$KUBECTL_CMD create namespace "$NAMESPACE" --dry-run=client -o yaml | $KUBECTL_CMD apply -f - || {
     echo "⚠️  Namespace may already exist"
 }
 echo "✅ Namespace ready"
@@ -66,7 +93,7 @@ echo "Deploying manifests..."
 echo "Note: This will perform server-side validation against the cluster."
 echo ""
 
-kubectl apply -f "$KUBERNETES_DIR/" -n "$NAMESPACE"
+$KUBECTL_CMD apply -f "$KUBERNETES_DIR/" -n "$NAMESPACE"
 
 echo ""
 echo "✅ Deployment completed"
@@ -76,13 +103,13 @@ echo ""
 echo "=== Verifying Deployment ==="
 echo ""
 echo "📦 Deployments:"
-kubectl get deployments -n "$NAMESPACE" || echo "  (none found)"
+$KUBECTL_CMD get deployments -n "$NAMESPACE" || echo "  (none found)"
 echo ""
 echo "🔌 Services:"
-kubectl get services -n "$NAMESPACE" || echo "  (none found)"
+$KUBECTL_CMD get services -n "$NAMESPACE" || echo "  (none found)"
 echo ""
 echo "📋 ConfigMaps:"
-kubectl get configmaps -n "$NAMESPACE" || echo "  (none found)"
+$KUBECTL_CMD get configmaps -n "$NAMESPACE" || echo "  (none found)"
 echo ""
 echo "✅ Verification completed"
 
