@@ -296,10 +296,18 @@ jobs:
         echo ""
         echo "✅ All manifest files passed client-side validation."
 
-    - name: Skip real cluster deployment
+    - name: Deploy to cluster (if KUBECONFIG available)
+      if: ${{ secrets.KUBECONFIG != '' && secrets.KUBECONFIG != null }}
+      env:
+        KUBECONFIG: ${{ secrets.KUBECONFIG }}
       run: |
-        echo "No remote Kubernetes cluster configured for GitHub Actions."
-        echo "CI/CD pipeline performs client-side validation only."
+        echo "=== Deploying to Kubernetes cluster ==="
+        echo "KUBECONFIG is configured. Proceeding with deployment."
+        
+        # Write KUBECONFIG to file
+        mkdir -p ~/.kube
+        echo "$KUBECONFIG" > ~/.kube/config
+        chmod 600 ~/.kube/config
         
         echo "Waiting for resources to be created..."
         sleep 5
@@ -351,8 +359,9 @@ jobs:
         echo "✅ Deployment verification completed"
     
     - name: Skip deployment (no KUBECONFIG)
-      if: ${{ secrets.KUBECONFIG == '' }}
+      if: ${{ secrets.KUBECONFIG == '' || secrets.KUBECONFIG == null }}
       run: |
+        echo "=== Skipping Kubernetes Deployment ==="
         echo "KUBECONFIG secret is not set. Skipping Kubernetes deployment."
         echo "✅ Manifest validation passed. Deployment would proceed if KUBECONFIG was available."
 
