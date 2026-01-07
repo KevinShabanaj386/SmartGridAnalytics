@@ -490,4 +490,3 @@ volumes:
   mongodb_data:
   cassandra_data:
   tensorflow_models:
-  tensorflow_models:
