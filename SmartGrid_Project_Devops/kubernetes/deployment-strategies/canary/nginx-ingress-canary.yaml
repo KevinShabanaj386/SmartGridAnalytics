@@ -1,0 +1,47 @@
+# NGINX Ingress për Canary Deployment me Weighted Routing
+# Kjo përdoret nëse nuk keni Istio
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-gateway-canary
+  namespace: smartgrid
+  annotations:
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "10"  # 10% traffic në canary
+    # Ose përdorni header-based routing:
+    # nginx.ingress.kubernetes.io/canary-by-header: "X-Canary"
+    # nginx.ingress.kubernetes.io/canary-by-header-value: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api.smartgrid.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway-canary
+            port:
+              number: 5000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-gateway-stable
+  namespace: smartgrid
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api.smartgrid.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway-stable
+            port:
+              number: 5000
+
