@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  # AI Enhancement Layer - përdor Kafka nga Consumption Collector
+  ai-enhancement-layer:
+    build: .
+    container_name: kosovo-ai-enhancement
+    ports:
+      - "5010:5010"
+    environment:
+      - KAFKA_BROKER=localhost:9092  # Përdor existing Kafka brokers
+      - KAFKA_TOPIC_WEATHER=kosovo-weather-data
+      - KAFKA_TOPIC_PRICES=kosovo-energy-prices
+      - KAFKA_TOPIC_CONSUMPTION=kosovo-energy-consumption
+      - KAFKA_TOPIC_ENHANCED=kosovo-enhanced-data
+      - USE_LLM=false  # Disable LLM by default
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    restart: unless-stopped
