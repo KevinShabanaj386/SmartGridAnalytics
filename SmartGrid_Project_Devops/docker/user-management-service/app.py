@@ -727,6 +727,14 @@ if __name__ == '__main__':
         except Exception as e:
             logger.warning(f"Could not initialize audit logs: {e}")
     
+    # Initialize Data Access Governance tables
+    if DAG_AVAILABLE:
+        try:
+            init_dag_tables()
+            logger.info("Data Access Governance tables initialized")
+        except Exception as e:
+            logger.warning(f"Could not initialize DAG tables: {e}")
+    
     # Register with Consul
     register_with_consul()
     
