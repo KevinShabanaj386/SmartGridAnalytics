@@ -90,8 +90,24 @@ $KUBECTL_CMD create namespace "$NAMESPACE" --dry-run=client -o yaml | $KUBECTL_C
 echo "✅ Namespace ready"
 echo ""
 
-# Deploy manifests
-echo "Deploying manifests..."
+# Deploy infrastructure first (if exists)
+if [ -d "$KUBERNETES_DIR/infrastructure" ]; then
+    echo "Deploying infrastructure services..."
+    echo "  - PostgreSQL"
+    echo "  - Kafka + Zookeeper"
+    echo "  - Redis"
+    echo "  - Consul"
+    echo "  - Vault"
+    echo ""
+    $KUBECTL_CMD apply -f "$KUBERNETES_DIR/infrastructure/" -n "$NAMESPACE"
+    echo ""
+    echo "⏳ Waiting for infrastructure to be ready (30 seconds)..."
+    sleep 30
+    echo ""
+fi
+
+# Deploy microservices
+echo "Deploying microservices..."
 echo "Note: This will perform server-side validation against the cluster."
 echo ""
 
