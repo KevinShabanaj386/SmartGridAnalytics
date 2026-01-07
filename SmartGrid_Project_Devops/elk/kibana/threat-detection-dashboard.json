@@ -1,0 +1,75 @@
+{
+  "version": "8.11.0",
+  "kibana": {
+    "version": "8.11.0",
+    "saved_objects": [
+      {
+        "type": "dashboard",
+        "id": "threat-detection-dashboard",
+        "attributes": {
+          "title": "SIEM Threat Detection Dashboard",
+          "description": "Real-time threat detection and security monitoring",
+          "panelsJSON": "[{\"version\":\"8.11.0\",\"gridData\":{\"x\":0,\"y\":0,\"w\":24,\"h\":15,\"i\":\"1\"},\"panelIndex\":\"1\",\"embeddableConfig\":{\"title\":\"Threat Events Timeline\"},\"panelRefName\":\"panel_1\"},{\"version\":\"8.11.0\",\"gridData\":{\"x\":24,\"y\":0,\"w\":24,\"h\":15,\"i\":\"2\"},\"panelIndex\":\"2\",\"embeddableConfig\":{\"title\":\"Threat Severity Distribution\"},\"panelRefName\":\"panel_2\"},{\"version\":\"8.11.0\",\"gridData\":{\"x\":0,\"y\":15,\"w\":24,\"h\":15,\"i\":\"3\"},\"panelIndex\":\"3\",\"embeddableConfig\":{\"title\":\"Top Threat Types\"},\"panelRefName\":\"panel_3\"},{\"version\":\"8.11.0\",\"gridData\":{\"x\":24,\"y\":15,\"w\":24,\"h\":15,\"i\":\"4\"},\"panelIndex\":\"4\",\"embeddableConfig\":{\"title\":\"Threats by IP Address\"},\"panelRefName\":\"panel_4\"}]",
+          "optionsJSON": "{\"darkTheme\":false,\"hidePanelTitles\":false}",
+          "version": 1,
+          "timeRestore": true,
+          "timeTo": "now",
+          "timeFrom": "now-24h",
+          "refreshInterval": {
+            "pause": false,
+            "value": 30000
+          }
+        }
+      },
+      {
+        "type": "visualization",
+        "id": "threat-timeline",
+        "attributes": {
+          "title": "Threat Events Timeline",
+          "visState": "{\"title\":\"Threat Events Timeline\",\"type\":\"histogram\",\"params\":{\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"bottom\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"linear\"},\"labels\":{\"show\":true,\"truncate\":100},\"title\":{}}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"LeftAxis-1\",\"type\":\"value\",\"position\":\"left\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"linear\",\"mode\":\"normal\"},\"labels\":{\"show\":true,\"rotate\":0,\"filter\":false,\"truncate\":100},\"title\":{\"text\":\"Count\"}}],\"seriesParams\":[{\"show\":true,\"type\":\"histogram\",\"mode\":\"stacked\",\"data\":{\"label\":\"Count\",\"id\":\"1\"},\"valueAxis\":\"ValueAxis-1\",\"drawLinesBetweenPoints\":true,\"showCircles\":true}],\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"times\":[],\"addTimeMarker\":false},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"@timestamp\",\"interval\":\"auto\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"group\",\"params\":{\"field\":\"threat_severity.keyword\",\"size\":5,\"order\":\"desc\",\"orderBy\":\"1\"}}]}",
+          "uiStateJSON": "{}",
+          "kibanaSavedObjectMeta": {
+            "searchSourceJSON": "{\"index\":\"smartgrid-threats-*\",\"query\":{\"match_all\":{}},\"filter\":[]}"
+          }
+        }
+      },
+      {
+        "type": "visualization",
+        "id": "threat-severity-pie",
+        "attributes": {
+          "title": "Threat Severity Distribution",
+          "visState": "{\"title\":\"Threat Severity Distribution\",\"type\":\"pie\",\"params\":{\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"isDonut\":true,\"labels\":{\"show\":false,\"values\":true,\"last_level\":true,\"truncate\":100}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"threat_severity.keyword\",\"size\":5,\"order\":\"desc\",\"orderBy\":\"1\"}}]}",
+          "uiStateJSON": "{}",
+          "kibanaSavedObjectMeta": {
+            "searchSourceJSON": "{\"index\":\"smartgrid-threats-*\",\"query\":{\"match_all\":{}},\"filter\":[]}"
+          }
+        }
+      },
+      {
+        "type": "visualization",
+        "id": "top-threat-types",
+        "attributes": {
+          "title": "Top Threat Types",
+          "visState": "{\"title\":\"Top Threat Types\",\"type\":\"horizontal_bar\",\"params\":{\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"left\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"linear\"},\"labels\":{\"show\":true,\"truncate\":100},\"title\":{}}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"LeftAxis-1\",\"type\":\"value\",\"position\":\"bottom\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"linear\",\"mode\":\"normal\"},\"labels\":{\"show\":true,\"rotate\":0,\"filter\":false,\"truncate\":100},\"title\":{\"text\":\"Count\"}}],\"seriesParams\":[{\"show\":true,\"type\":\"histogram\",\"mode\":\"stacked\",\"data\":{\"label\":\"Count\",\"id\":\"1\"},\"valueAxis\":\"ValueAxis-1\",\"drawLinesBetweenPoints\":true,\"showCircles\":true}],\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"times\":[],\"addTimeMarker\":false},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"threat_type.keyword\",\"size\":10,\"order\":\"desc\",\"orderBy\":\"1\"}}]}",
+          "uiStateJSON": "{}",
+          "kibanaSavedObjectMeta": {
+            "searchSourceJSON": "{\"index\":\"smartgrid-threats-*\",\"query\":{\"match_all\":{}},\"filter\":[]}"
+          }
+        }
+      },
+      {
+        "type": "visualization",
+        "id": "threats-by-ip",
+        "attributes": {
+          "title": "Threats by IP Address",
+          "visState": "{\"title\":\"Threats by IP Address\",\"type\":\"table\",\"params\":{\"perPage\":10,\"showPartialRows\":false,\"showMeticsAtAllLevels\":false,\"sort\":{\"columnIndex\":null,\"direction\":null},\"showTotal\":false,\"showToolbar\":true,\"totalFunc\":\"sum\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"bucket\",\"params\":{\"field\":\"ip_address.keyword\",\"size\":10,\"order\":\"desc\",\"orderBy\":\"1\"}},{\"id\":\"3\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"bucket\",\"params\":{\"field\":\"threat_type.keyword\",\"size\":5,\"order\":\"desc\",\"orderBy\":\"1\"}}]}",
+          "uiStateJSON": "{}",
+          "kibanaSavedObjectMeta": {
+            "searchSourceJSON": "{\"index\":\"smartgrid-threats-*\",\"query\":{\"match_all\":{}},\"filter\":[]}"
+          }
+        }
+      }
+    ]
+  }
+}
+
