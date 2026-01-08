@@ -188,12 +188,18 @@
                 if (sensorType) {
                     url += `&sensor_type=${sensorType}`;
                 }
+                // Add cache-busting for fresh data
+                url += `&_t=${Date.now()}`;
                 
                 // Refresh token again right before the call
                 authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
                 const response = await fetch(url, {
-                    headers: {'Authorization': `Bearer ${authToken}`},
-                    credentials: 'include'
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Cache-Control': 'no-cache'
+                    },
+                    credentials: 'include',
+                    cache: 'no-store'
                 });
                 
                 if (response.status === 401) {

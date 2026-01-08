@@ -262,7 +262,7 @@ def health_check():
     }), 200
 
 @app.route('/api/v1/analytics/sensor/stats', methods=['GET'])
-@cache_result(ttl=30)  # Cache për 30 sekonda (reduced for real-time updates)
+@cache_result(ttl=10)  # Cache për 10 sekonda (reduced for real-time updates)
 def get_sensor_statistics():
     """
     Kthen statistikat për sensorët

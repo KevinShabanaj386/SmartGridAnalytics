@@ -548,9 +548,9 @@ def consume_sensor_data():
         bootstrap_servers=[KAFKA_BROKER],
         group_id=KAFKA_GROUP_ID,
         value_deserializer=lambda m: deserialize_message(m, schema_name='sensor_data'),
-        auto_offset_reset='earliest',
-        enable_auto_commit=True,
-        consumer_timeout_ms=1000
+        auto_offset_reset='latest',  # Changed from 'earliest' to 'latest' to only get new messages
+        enable_auto_commit=True
+        # Removed consumer_timeout_ms to keep consumer alive indefinitely
     )
     
     logger.info(f"Started consuming from topic: {KAFKA_TOPIC_SENSOR_DATA}")
@@ -608,9 +608,9 @@ def consume_meter_readings():
         bootstrap_servers=[KAFKA_BROKER],
         group_id=f"{KAFKA_GROUP_ID}-meters",
         value_deserializer=lambda m: deserialize_message(m, schema_name='meter_readings'),
-        auto_offset_reset='earliest',
-        enable_auto_commit=True,
-        consumer_timeout_ms=1000
+        auto_offset_reset='latest',  # Changed from 'earliest' to 'latest' to only get new messages
+        enable_auto_commit=True
+        # Removed consumer_timeout_ms to keep consumer alive indefinitely
     )
     
     logger.info(f"Started consuming from topic: {KAFKA_TOPIC_METER_READINGS}")

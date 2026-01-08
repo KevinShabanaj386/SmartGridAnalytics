@@ -129,8 +129,14 @@ async function loadStats() {
     try {
         // Refresh token again right before the call
         authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-        const response = await fetch('/api/sensor-stats?hours=24', {
-            headers: {'Authorization': `Bearer ${authToken}`}
+        // Add cache-busting to ensure fresh data
+        const cacheBuster = `&_t=${Date.now()}`;
+        const response = await fetch(`/api/sensor-stats?hours=24${cacheBuster}`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Cache-Control': 'no-cache'
+            },
+            cache: 'no-store'
         });
         
         // Check for auth errors
@@ -147,17 +153,48 @@ async function loadStats() {
         
         const data = await response.json();
         
+        console.log('📊 Sensor stats response:', data);
+        
         if (data.status === 'success' && data.data) {
             const stats = data.data;
+            console.log(`✅ Received ${stats.length} sensor stats`);
+            
+            if (stats.length === 0) {
+                console.warn('⚠️ No sensor data in response');
+                return;
+            }
+            
             const totalSensors = new Set(stats.map(s => s.sensor_id)).size;
             const avgValue = stats.reduce((sum, s) => sum + parseFloat(s.avg_value || 0), 0) / stats.length;
             const totalReadings = stats.reduce((sum, s) => sum + parseInt(s.count || 0), 0);
             
-            document.getElementById('activeSensors').textContent = totalSensors;
-            document.getElementById('avgValue').textContent = avgValue.toFixed(2);
-            document.getElementById('totalReadings').textContent = totalReadings.toLocaleString();
+            console.log(`📈 Stats: ${totalSensors} sensors, ${totalReadings} readings, avg: ${avgValue.toFixed(2)}`);
+            
+            const activeSensorsEl = document.getElementById('activeSensors');
+            const avgValueEl = document.getElementById('avgValue');
+            const totalReadingsEl = document.getElementById('totalReadings');
+            
+            if (activeSensorsEl) {
+                activeSensorsEl.textContent = totalSensors;
+            } else {
+                console.error('❌ Element activeSensors not found');
+            }
+            
+            if (avgValueEl) {
+                avgValueEl.textContent = avgValue.toFixed(2);
+            } else {
+                console.error('❌ Element avgValue not found');
+            }
+            
+            if (totalReadingsEl) {
+                totalReadingsEl.textContent = totalReadings.toLocaleString();
+            } else {
+                console.error('❌ Element totalReadings not found');
+            }
         } else if (data.error) {
             console.error('❌ API returned error:', data.error);
+        } else {
+            console.warn('⚠️ Unexpected response format:', data);
         }
     } catch (error) {
         console.error('❌ Error loading stats:', error);
@@ -239,8 +276,17 @@ async function loadSensorStats() {
         });
         const data = await response.json();
         
+        console.log('📊 Sensor stats for chart:', data);
+        
         if (data.status === 'success' && data.data) {
-            updateSensorStatsChart(data.data);
+            console.log(`✅ Received ${data.data.length} stats for chart`);
+            if (data.data.length > 0) {
+                updateSensorStatsChart(data.data);
+            } else {
+                console.warn('⚠️ No data to display in chart');
+            }
+        } else {
+            console.warn('⚠️ No data in response for chart');
         }
     } catch (error) {
         console.error('Error loading sensor stats:', error);
@@ -295,13 +341,28 @@ async function loadRealtimeData() {
     try {
         // Refresh token again right before the call
         authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-        const response = await fetch('/api/sensor-stats?hours=1', {
-            headers: {'Authorization': `Bearer ${authToken}`}
+        // Add cache-busting for realtime data
+        const cacheBuster = `&_t=${Date.now()}`;
+        const response = await fetch(`/api/sensor-stats?hours=1${cacheBuster}`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Cache-Control': 'no-cache'
+            },
+            cache: 'no-store'
         });
         const data = await response.json();
         
+        console.log('⏱️ Realtime data:', data);
+        
         if (data.status === 'success' && data.data) {
-            updateRealtimeChart(data.data);
+            console.log(`✅ Received ${data.data.length} realtime data points`);
+            if (data.data.length > 0) {
+                updateRealtimeChart(data.data);
+            } else {
+                console.warn('⚠️ No realtime data to display');
+            }
+        } else {
+            console.warn('⚠️ No realtime data in response');
         }
     } catch (error) {
         console.error('Error loading realtime data:', error);
@@ -417,8 +478,13 @@ async function loadRecentData(limit = 10) {
         // Add cache-busting timestamp to ensure fresh data
         const cacheBuster = `&_t=${Date.now()}`;
         const response = await fetch(`/api/sensor-stats?hours=24${cacheBuster}`, {
-            headers: {'Authorization': `Bearer ${authToken}`},
-            cache: 'no-cache'  // Disable browser cache
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            },
+            cache: 'no-store'  // Disable browser cache completely
         });
         
         // Check for auth errors
@@ -434,9 +500,13 @@ async function loadRecentData(limit = 10) {
         
         const data = await response.json();
         
+        console.log('📋 Recent data response:', data);
+        
         if (data.status === 'success' && data.data && data.data.length > 0) {
+            console.log(`✅ Received ${data.data.length} data points for table`);
             updateDataTable(data.data.slice(0, limit));
         } else {
+            console.warn('⚠️ No data in response or empty array');
             // Show message if no data but API call succeeded
             const tbody = document.getElementById('dataTableBody');
             if (tbody) {

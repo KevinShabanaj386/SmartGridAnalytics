@@ -398,6 +398,18 @@ services:
       - WEATHER_UPDATE_INTERVAL=60
     depends_on:
       - kafka
+
+  sensor-producer:
+    build: ./sensor-producer-service
+    container_name: smartgrid-sensor-producer
+    ports:
+      - "5011:5010"
+    environment:
+      - DATA_INGESTION_URL=http://smartgrid-data-ingestion:5001
+      - SENSOR_UPDATE_INTERVAL=30
+      - USE_REAL_SENSOR_API=false
+    depends_on:
+      - data-ingestion-service
     restart: unless-stopped
 
   # Kosovo Weather Data Collector - Real weather data për qytetet e Kosovës (AI-powered)
