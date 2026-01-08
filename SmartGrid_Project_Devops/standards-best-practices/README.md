@@ -8,19 +8,13 @@ Ky folder përmban standards dhe best practices për Smart Grid Analytics, duke 
 
 ```
 standards-best-practices/
+├── STANDARDS.md                   # Consolidated standards documentation
 ├── STANDARDS_ARCHITECTURE.md      # Architecture overview
 ├── asyncapi/                      # AsyncAPI specifications
 │   └── asyncapi.yaml
-├── versioning/                    # Versioning standards
-│   ├── SEMVER_POLICY.md
-│   ├── VERSION
-│   └── CHANGELOG.md
-├── code-review/                   # Code review policies
-│   └── CODE_REVIEW_POLICY.md
-├── development-methodologies/     # Agile, DevOps, DataOps
-│   └── METHODOLOGIES.md
-└── avro-schema-evolution/         # Schema evolution
-    └── SCHEMA_EVOLUTION_POLICY.md
+└── versioning/                     # Versioning standards
+    ├── VERSION
+    └── CHANGELOG.md
 ```
 
 ## Komponentët
@@ -159,11 +153,10 @@ sensor_data-v1.0.0.avsc → sensor_data-v2.0.0.avsc
 
 ## Documentation
 
+- **Standards**: `STANDARDS.md` - Consolidated standards and best practices
 - **Architecture**: `STANDARDS_ARCHITECTURE.md`
-- **SemVer Policy**: `versioning/SEMVER_POLICY.md`
-- **Code Review**: `code-review/CODE_REVIEW_POLICY.md`
-- **Methodologies**: `development-methodologies/METHODOLOGIES.md`
-- **Schema Evolution**: `avro-schema-evolution/SCHEMA_EVOLUTION_POLICY.md`
+- **Versioning**: `versioning/VERSION` and `versioning/CHANGELOG.md`
+- **AsyncAPI**: `asyncapi/asyncapi.yaml`
 
 ## Status: 100% Complete ✅
 

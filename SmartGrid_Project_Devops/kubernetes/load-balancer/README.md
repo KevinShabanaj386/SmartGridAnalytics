@@ -1,8 +1,8 @@
-# Load Balancer Configuration - NGINX & Envoy
+# Load Balancer Configuration - NGINX
 
 ## Përmbledhje
 
-Ky dokument përshkruan konfigurimin e Layer 7 load balancing me NGINX dhe Envoy për Smart Grid Analytics.
+Ky dokument përshkruan konfigurimin e Layer 7 load balancing me NGINX për Smart Grid Analytics.
 
 ## NGINX Load Balancer
 
@@ -66,79 +66,7 @@ location /api/v1/data {
 }
 ```
 
-## Envoy Proxy
-
-### Features
-
-1. **Advanced Traffic Management**
-   - Circuit breakers
-   - Retry policies
-   - Timeout configuration
-   - Health checks
-
-2. **Intelligent Routing**
-   - Path matching
-   - Header matching
-   - Content-based routing
-   - Weighted routing
-
-3. **Observability**
-   - Access logs
-   - Metrics
-   - Distributed tracing
-
-### Configuration
-
-**Vendndodhja**: `kubernetes/load-balancer/envoy-config.yaml`
-
-**Load Balancing Policies:**
-- `LEAST_REQUEST` - Least requests
-- `ROUND_ROBIN` - Round robin
-- `RANDOM` - Random selection
-- `RING_HASH` - Consistent hashing
-
-**Intelligent Routing Examples:**
-
-```yaml
-# Path-based routing
-- match:
-    path: "/api/v1/analytics"
-  route:
-    cluster: analytics_service
-
-# Header-based routing
-- match:
-    path: "/api/v1/features"
-    headers:
-    - name: "x-feature-flag"
-      exact_match: "new_analytics"
-  route:
-    cluster: analytics_service_v2
-
-# Content-based routing
-- match:
-    path: "/api/v1/data"
-    headers:
-    - name: "content-type"
-      exact_match: "application/json"
-  route:
-    cluster: data_processing_service_json
-```
-
-## Comparison: NGINX vs Envoy
-
-| Feature | NGINX | Envoy |
-|---------|-------|-------|
-| **Maturity** | ✅ Very Mature | ⚠️ Modern |
-| **Performance** | ✅ Excellent | ✅ Excellent |
-| **Configuration** | ✅ Simple | ⚠️ Complex |
-| **Service Mesh** | ❌ | ✅ Native |
-| **Observability** | ⚠️ Basic | ✅ Advanced |
-| **Dynamic Config** | ⚠️ Limited | ✅ Full Support |
-
 ## Deployment
-
-### NGINX
 
 ```bash
 # Apply NGINX configuration
@@ -146,16 +74,6 @@ kubectl apply -f kubernetes/load-balancer/nginx-config.yaml
 
 # Deploy NGINX Ingress Controller
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
-```
-
-### Envoy
-
-```bash
-# Apply Envoy configuration
-kubectl apply -f kubernetes/load-balancer/envoy-config.yaml
-
-# Deploy Envoy Proxy
-kubectl apply -f kubernetes/load-balancer/envoy-deployment.yaml
 ```
 
 ## Best Practices

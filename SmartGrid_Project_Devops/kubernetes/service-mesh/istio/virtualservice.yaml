@@ -1,5 +1,5 @@
 # Istio VirtualServices për të gjitha services
-# Përcakton routing rules dhe retry policies
+# Përcakton routing rules, retry policies, dhe timeouts
 
 ---
 # API Gateway VirtualService
@@ -10,30 +10,50 @@ metadata:
   namespace: smartgrid
 spec:
   hosts:
+  - api.smartgrid.local
+  - api-gateway.smartgrid.svc.cluster.local
   - api-gateway
+  gateways:
+  - smartgrid-gateway
+  - mesh
   http:
+  # Health checks - short timeout
   - match:
     - uri:
-        prefix: "/api/v1"
-    route:
-    - destination:
-        host: api-gateway
-        port:
-          number: 5000
-    retries:
-      attempts: 3
-      perTryTimeout: 5s
-      retryOn: 5xx,reset,connect-failure
-    timeout: 30s
-  - match:
-    - uri:
-        prefix: "/health"
+        prefix: /health
     route:
     - destination:
         host: api-gateway
         port:
           number: 5000
     timeout: 5s
+  
+  # API endpoints - with retry dhe timeout
+  - match:
+    - uri:
+        prefix: /api
+    route:
+    - destination:
+        host: api-gateway
+        port:
+          number: 5000
+      weight: 100
+    retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+    timeout: 30s
+  
+  # Frontend routes
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: frontend
+        port:
+          number: 8080
+      weight: 100
 
 ---
 # Data Ingestion VirtualService
@@ -49,11 +69,29 @@ spec:
   - route:
     - destination:
         host: data-ingestion
-        port:
-          number: 5001
     retries:
       attempts: 3
       perTryTimeout: 10s
+      retryOn: 5xx,reset
+    timeout: 60s
+
+---
+# Analytics Service VirtualService
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: analytics-service
+  namespace: smartgrid
+spec:
+  hosts:
+  - analytics-service
+  http:
+  - route:
+    - destination:
+        host: analytics-service
+    retries:
+      attempts: 3
+      perTryTimeout: 5s
       retryOn: 5xx,reset
     timeout: 30s
 
@@ -71,56 +109,30 @@ spec:
   - route:
     - destination:
         host: data-processing
-        port:
-          number: 5001
     retries:
-      attempts: 5
-      perTryTimeout: 15s
-      retryOn: 5xx,reset,connect-failure
+      attempts: 2
+      perTryTimeout: 10s
+      retryOn: 5xx
     timeout: 60s
 
 ---
-# Analytics VirtualService
+# Notification Service VirtualService
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
 metadata:
-  name: analytics
+  name: notification-service
   namespace: smartgrid
 spec:
   hosts:
-  - analytics
+  - notification-service
   http:
   - route:
     - destination:
-        host: analytics
-        port:
-          number: 5002
+        host: notification-service
     retries:
-      attempts: 3
-      perTryTimeout: 10s
-      retryOn: 5xx,reset
-    timeout: 30s
-
----
-# Notification VirtualService
-apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: notification
-  namespace: smartgrid
-spec:
-  hosts:
-  - notification
-  http:
-  - route:
-    - destination:
-        host: notification
-        port:
-          number: 5003
-    retries:
-      attempts: 3
-      perTryTimeout: 5s
-      retryOn: 5xx,reset
+      attempts: 2
+      perTryTimeout: 3s
+      retryOn: 5xx
     timeout: 15s
 
 ---
@@ -128,20 +140,17 @@ spec:
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
 metadata:
-  name: user-management
+  name: user-management-service
   namespace: smartgrid
 spec:
   hosts:
-  - user-management
+  - user-management-service
   http:
   - route:
     - destination:
-        host: user-management
-        port:
-          number: 5004
+        host: user-management-service
     retries:
       attempts: 3
       perTryTimeout: 5s
       retryOn: 5xx,reset
-    timeout: 15s
-
+    timeout: 30s

@@ -1,6 +1,56 @@
-# Istio AuthorizationPolicy për access control
-# AuthorizationPolicy përcakton kush mund të aksesojë çfarë
+# Istio Authorization Policies për Smart Grid Analytics
+# Përcakton access control rules për Zero Trust Architecture
 
+---
+# Allow API Gateway to access all services
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-api-gateway
+  namespace: smartgrid
+spec:
+  selector:
+    matchLabels:
+      app: api-gateway
+  action: ALLOW
+  rules:
+  - to:
+    - operation:
+        hosts:
+        - "*"
+
+---
+# Allow services to communicate with each other (service-to-service)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-service-to-service
+  namespace: smartgrid
+spec:
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/smartgrid/sa/*"
+    to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        paths: ["/api/v1/*", "/health"]
+
+---
+# Deny all by default (Zero Trust)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all
+  namespace: smartgrid
+spec:
+  action: DENY
+  # No rules = deny all
+
+---
+# Specific policy për API Gateway
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
@@ -12,7 +62,6 @@ spec:
       app: api-gateway
   action: ALLOW
   rules:
-  # Lejo traffic nga frontend
   - from:
     - source:
         principals: ["cluster.local/ns/smartgrid/sa/frontend"]
@@ -20,15 +69,11 @@ spec:
     - operation:
         methods: ["GET", "POST"]
         paths: ["/api/*"]
-  
-  # Lejo health checks
   - from:
-    - source: {}  # Lejo nga çdo source
+    - source: {}
     to:
     - operation:
         paths: ["/health"]
-  
-  # Lejo traffic nga istio-ingressgateway
   - from:
     - source:
         principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"]
@@ -38,7 +83,7 @@ spec:
         paths: ["/*"]
 
 ---
-# AuthorizationPolicy për analytics service
+# Policy për analytics service
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
@@ -50,7 +95,6 @@ spec:
       app: analytics-service
   action: ALLOW
   rules:
-  # Lejo vetëm nga API Gateway
   - from:
     - source:
         principals: ["cluster.local/ns/smartgrid/sa/api-gateway"]
@@ -60,7 +104,7 @@ spec:
         paths: ["/api/v1/analytics/*"]
 
 ---
-# AuthorizationPolicy për data-ingestion service
+# Policy për data-ingestion service
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
@@ -72,7 +116,6 @@ spec:
       app: data-ingestion-service
   action: ALLOW
   rules:
-  # Lejo vetëm nga API Gateway
   - from:
     - source:
         principals: ["cluster.local/ns/smartgrid/sa/api-gateway"]
@@ -80,4 +123,3 @@ spec:
     - operation:
         methods: ["POST"]
         paths: ["/api/v1/ingest/*"]
-

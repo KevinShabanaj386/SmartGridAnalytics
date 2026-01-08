@@ -50,11 +50,11 @@ kubectl label namespace smartgrid istio-injection=enabled --overwrite
 # Gateway
 kubectl apply -f gateway.yaml
 
-# VirtualService
-kubectl apply -f virtualservice-api-gateway.yaml
+# VirtualService (përmban routing, retry, dhe timeout policies)
+kubectl apply -f virtualservice.yaml
 
-# DestinationRule
-kubectl apply -f destination-rule-api-gateway.yaml
+# DestinationRule (përmban load balancing dhe circuit breakers)
+kubectl apply -f destination-rule.yaml
 
 # Security
 kubectl apply -f peer-authentication.yaml

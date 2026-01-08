@@ -25,14 +25,15 @@ Pas verifikimit, traffic shpërndahet në Green dhe Blue fshihet.
 
 ```bash
 # Deployoni Blue dhe Green
-kubectl apply -f blue-green/api-gateway-blue-green.yaml
+kubectl apply -f deployment-strategies/blue-green/api-gateway-blue-green.yaml
 
 # Verifikoni që Green është ready
 kubectl get pods -n smartgrid -l version=green
 
 # Switch traffic nga Blue në Green
-chmod +x blue-green/switch-traffic.sh
-./blue-green/switch-traffic.sh
+cd deployment-strategies/blue-green
+chmod +x switch-traffic.sh
+./switch-traffic.sh
 ```
 
 ### 2. Canary Deployment
@@ -54,20 +55,21 @@ Canary deployment shpërndan një përqindje të vogël të traffic-it në versi
 
 ```bash
 # Deployoni Stable dhe Canary
-kubectl apply -f canary/api-gateway-canary.yaml
-kubectl apply -f canary/istio-virtualservice.yaml
+kubectl apply -f deployment-strategies/canary/api-gateway-canary.yaml
+kubectl apply -f deployment-strategies/canary/istio-virtualservice.yaml
 
 # Promovoni Canary gradualisht
-chmod +x canary/promote-canary.sh
-./canary/promote-canary.sh
+cd deployment-strategies/canary
+chmod +x promote-canary.sh
+./promote-canary.sh
 ```
 
 #### Me NGINX Ingress:
 
 ```bash
 # Deployoni Stable dhe Canary
-kubectl apply -f canary/api-gateway-canary.yaml
-kubectl apply -f canary/nginx-ingress-canary.yaml
+kubectl apply -f deployment-strategies/canary/api-gateway-canary.yaml
+kubectl apply -f deployment-strategies/canary/nginx-ingress-canary.yaml
 
 # Update canary weight manualisht
 kubectl annotate ingress api-gateway-canary -n smartgrid \

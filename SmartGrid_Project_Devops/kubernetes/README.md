@@ -49,15 +49,15 @@ kubernetes/
 ├── deploy-local.sh            # Deployment script (requires cluster)
 ├── namespace.yaml             # Namespace definition
 ├── configmap.yaml             # Configuration maps
-├── *-deployment.yaml          # Service deployments
 ├── hpa.yaml                   # Horizontal Pod Autoscaler
 ├── ingress.yaml               # Ingress configuration
+├── *-deployment.yaml          # Service deployments (can be organized in deployments/ folder)
 ├── auto-scaling/              # HPA configurations
 ├── auto-healing/              # Pod Disruption Budgets
 ├── database-per-service/      # Database-per-service pattern
 ├── deployment-strategies/     # Blue-Green and Canary
 ├── helm/                      # Helm charts
-├── load-balancer/            # NGINX/Envoy configs
+├── load-balancer/            # NGINX load balancer configs
 └── service-mesh/             # Istio configurations
 ```
 
@@ -146,6 +146,8 @@ cd service-mesh/istio
 | Analytics | `analytics-deployment.yaml` | 5002 |
 | Notification | `notification-deployment.yaml` | 5003 |
 | User Management | `user-management-deployment.yaml` | 5004 |
+
+**Note**: Deployment files are in the root of `kubernetes/` directory. They can be organized into a `deployments/` subfolder if desired.
 
 ## Configuration
 
