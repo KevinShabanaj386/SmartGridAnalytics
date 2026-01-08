@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Electricity Dashboard - Smart Grid Analytics</title>
+    <title>Electricity Dashboard - Albania | Smart Grid Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="/static/css/simple-style.css">
     <link rel="stylesheet" href="/static/css/kosovo.css">
@@ -80,7 +80,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>⚡ Electricity Dashboard</h1>
+            <h1>🇦🇱 Electricity Dashboard - Albania</h1>
             <nav class="nav">
                 <a href="/">Dashboard</a>
                 <a href="/dashboard">Statistikat</a>
@@ -90,19 +90,19 @@
                 <div class="nav-dropdown">
     <button class="nav-dropbtn active">🌍 Shtetet ▾</button>
     <div class="nav-dropdown-content">
-        <a href="/kosovo" class="active">🇽🇰 Kosovo</a>
-        <a href="/albania">🇦🇱 Albania</a>
+        <a href="/kosovo">🇽🇰 Kosovo</a>
+        <a href="/albania" class="active">🇦🇱 Albania</a>
         <a href="/serbia">🇷🇸 Serbia</a>
         <a href="/greece">🇬🇷 Greece</a>
     </div>
 </div>
                 <div class="nav-dropdown">
-    <button class="nav-dropbtn active">⚡ Kosovo ▾</button>
+    <button class="nav-dropbtn active">⚡ Albania ▾</button>
     <div class="nav-dropdown-content">
-        <a href="/kosovo" class="active">Përmbledhje</a>
-        <a href="/kosovo/prices">Çmimet</a>
-        <a href="/kosovo/consumption">Konsumi</a>
-        <a href="/kosovo/weather">Moti</a>
+        <a href="/albania" class="active">Përmbledhje</a>
+        <a href="/albania/prices">Çmimet</a>
+        <a href="/albania/consumption">Konsumi</a>
+        <a href="/albania/weather">Moti</a>
     </div>
 </div>
             </nav>
@@ -115,7 +115,7 @@
             </div>
             
             <!-- Quick Stats -->
-            <div class="stats-grid" id="kosovoStats">
+            <div class="stats-grid" id="albaniaStats">
                 <div class="stat-card">
                     <div class="label">🌤️ Qytete të Monitoruara</div>
                     <div class="value" id="citiesCount">-</div>
@@ -140,7 +140,7 @@
                 <article class="card">
                     <h3>🌤️ Të Dhëna Moti</h3>
                     <div class="card-actions">
-                        <a href="/kosovo/weather" class="btn btn-sm">Shiko Detaje</a>
+                        <a href="/albania/weather" class="btn btn-sm">Shiko Detaje</a>
                         <button class="btn btn-sm" onclick="refreshWeather()">🔄 Refresh</button>
                     </div>
                     <div id="weatherSummary" class="data-summary">
@@ -152,7 +152,7 @@
                 <article class="card">
                     <h3>⚡ Çmimet e Energjisë</h3>
                     <div class="card-actions">
-                        <a href="/kosovo/prices" class="btn btn-sm">Shiko Detaje</a>
+                        <a href="/albania/prices" class="btn btn-sm">Shiko Detaje</a>
                         <button class="btn btn-sm" onclick="refreshPrices()">🔄 Refresh</button>
                     </div>
                     <div id="pricesSummary" class="data-summary">
@@ -162,7 +162,7 @@
                         <canvas id="priceSparkline"></canvas>
                     </div>
                     <div id="pricesLongTermSummary" class="data-summary" style="margin-top: 10px; font-size: 0.85rem; color: #9ca3af;">
-                        <p>Analiza afatgjatë e çmimeve (që nga 2010) do të shfaqet këtu.</p>
+                        <p>Analiza afatgjatë e çmimeve do të shfaqet këtu.</p>
                     </div>
                 </article>
                 
@@ -170,20 +170,20 @@
                 <article class="card">
                     <h3>📊 Konsumi i Energjisë</h3>
                     <div class="card-actions">
-                        <a href="/kosovo/consumption" class="btn btn-sm">Shiko Detaje</a>
+                        <a href="/albania/consumption" class="btn btn-sm">Shiko Detaje</a>
                         <button class="btn btn-sm" onclick="refreshConsumption()">🔄 Refresh</button>
                     </div>
                     <div class="chart-container">
                         <canvas id="consumptionChart"></canvas>
                     </div>
                     <div id="consumptionLongTermSummary" class="data-summary" style="margin-top: 10px; font-size: 0.85rem; color: #9ca3af;">
-                        <p>Trendet historike të konsumit (që nga 2010) do të shfaqen këtu.</p>
+                        <p>Trendet historike të konsumit do të shfaqen këtu.</p>
                     </div>
                 </article>
             </div>
         </main>
     </div>
     
-    <script src="/static/js/kosovo-dashboard.js"></script>
+    <script src="/static/js/albania-dashboard.js"></script>
 </body>
 </html>

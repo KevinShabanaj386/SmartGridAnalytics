@@ -97,6 +97,69 @@ def kosovo_consumption():
     """Faqja e konsumit të energjisë për Kosovën"""
     return render_template('kosovo/consumption.html')
 
+# Albania Routes
+@app.route('/albania')
+def albania():
+    """Faqja e të dhënave të Shqipërisë"""
+    return render_template('albania/dashboard.html')
+
+@app.route('/albania/weather')
+def albania_weather():
+    """Faqja e të dhënave moti për Shqipërinë"""
+    return render_template('albania/weather.html')
+
+@app.route('/albania/prices')
+def albania_prices():
+    """Faqja e çmimeve të energjisë për Shqipërinë"""
+    return render_template('albania/prices.html')
+
+@app.route('/albania/consumption')
+def albania_consumption():
+    """Faqja e konsumit të energjisë për Shqipërinë"""
+    return render_template('albania/consumption.html')
+
+# Serbia Routes
+@app.route('/serbia')
+def serbia():
+    """Faqja e të dhënave të Serbisë"""
+    return render_template('serbia/dashboard.html')
+
+@app.route('/serbia/weather')
+def serbia_weather():
+    """Faqja e të dhënave moti për Serbinë"""
+    return render_template('serbia/weather.html')
+
+@app.route('/serbia/prices')
+def serbia_prices():
+    """Faqja e çmimeve të energjisë për Serbinë"""
+    return render_template('serbia/prices.html')
+
+@app.route('/serbia/consumption')
+def serbia_consumption():
+    """Faqja e konsumit të energjisë për Serbinë"""
+    return render_template('serbia/consumption.html')
+
+# Greece Routes
+@app.route('/greece')
+def greece():
+    """Faqja e të dhënave të Greqisë"""
+    return render_template('greece/dashboard.html')
+
+@app.route('/greece/weather')
+def greece_weather():
+    """Faqja e të dhënave moti për Greqinë"""
+    return render_template('greece/weather.html')
+
+@app.route('/greece/prices')
+def greece_prices():
+    """Faqja e çmimeve të energjisë për Greqinë"""
+    return render_template('greece/prices.html')
+
+@app.route('/greece/consumption')
+def greece_consumption():
+    """Faqja e konsumit të energjisë për Greqinë"""
+    return render_template('greece/consumption.html')
+
 @app.route('/api/login', methods=['POST'])
 def login():
     """Login API"""
@@ -580,6 +643,287 @@ def get_kosovo_consumption_yearly():
         return jsonify({'error': 'Service unavailable', 'status': 'service_down'}), 503
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# Helper function to generate simulated data for countries
+def generate_simulated_weather_data(country_name, cities):
+    """Generate simulated weather data for a country"""
+    import random
+    from datetime import datetime
+    
+    data = []
+    for city in cities:
+        temp = round(random.uniform(5, 25), 1)
+        data.append({
+            'city': city,
+            'country': country_name,
+            'temperature': temp,
+            'humidity': round(random.uniform(40, 80), 1),
+            'pressure': round(random.uniform(1000, 1020), 1),
+            'wind_speed': round(random.uniform(5, 20), 1),
+            'description': random.choice(['Clear', 'Partly Cloudy', 'Cloudy']),
+            'timestamp': datetime.utcnow().isoformat()
+        })
+    return {'status': 'success', 'data': data, 'country': country_name}
+
+def generate_simulated_price_data(country_name, base_price=0.08):
+    """Generate simulated price data for a country"""
+    import random
+    from datetime import datetime
+    
+    price = round(base_price + random.uniform(-0.01, 0.02), 4)
+    return {
+        'status': 'success',
+        'data': {
+            'country': country_name,
+            'price_eur_per_kwh': price,
+            'currency': 'EUR',
+            'source': 'Simulated Data',
+            'timestamp': datetime.utcnow().isoformat()
+        }
+    }
+
+def generate_simulated_consumption_data(country_name, base_consumption=5000):
+    """Generate simulated consumption data for a country"""
+    import random
+    from datetime import datetime
+    
+    consumption = round(base_consumption + random.uniform(-500, 1000), 2)
+    return {
+        'status': 'success',
+        'data': {
+            'country': country_name,
+            'total_consumption_mwh': consumption,
+            'timestamp': datetime.utcnow().isoformat(),
+            'regions': [
+                {'region': 'North', 'consumption_mwh': round(consumption * 0.3, 2)},
+                {'region': 'South', 'consumption_mwh': round(consumption * 0.4, 2)},
+                {'region': 'East', 'consumption_mwh': round(consumption * 0.2, 2)},
+                {'region': 'West', 'consumption_mwh': round(consumption * 0.1, 2)}
+            ]
+        }
+    }
+
+# Albania API Endpoints
+@app.route('/api/albania/weather', methods=['GET'])
+def get_albania_weather():
+    """Merr të dhëna moti për Shqipërinë (simulated)"""
+    cities = ['Tirana', 'Durrës', 'Vlorë', 'Shkodër', 'Korçë']
+    return jsonify(generate_simulated_weather_data('Albania', cities))
+
+@app.route('/api/albania/weather/cities', methods=['GET'])
+def get_albania_weather_cities():
+    """Merr listën e qyteteve të monitoruara për Shqipërinë"""
+    return jsonify({
+        'status': 'success',
+        'cities': ['Tirana', 'Durrës', 'Vlorë', 'Shkodër', 'Korçë']
+    })
+
+@app.route('/api/albania/prices', methods=['GET'])
+def get_albania_prices():
+    """Merr çmimet e energjisë për Shqipërinë (simulated)"""
+    return jsonify(generate_simulated_price_data('Albania', 0.09))
+
+@app.route('/api/albania/prices/historical', methods=['GET'])
+def get_albania_prices_historical():
+    """Merr çmimet historike për Shqipërinë (simulated)"""
+    import random
+    from datetime import datetime, timedelta
+    
+    data = []
+    base_price = 0.09
+    for i in range(14):
+        date = datetime.utcnow() - timedelta(days=13-i)
+        price = round(base_price + random.uniform(-0.01, 0.02), 4)
+        data.append({
+            'date': date.strftime('%Y-%m-%d'),
+            'price_eur_per_kwh': price
+        })
+    return jsonify({'status': 'success', 'data': data})
+
+@app.route('/api/albania/consumption', methods=['GET'])
+def get_albania_consumption():
+    """Merr konsumin e energjisë për Shqipërinë (simulated)"""
+    return jsonify(generate_simulated_consumption_data('Albania', 4500))
+
+@app.route('/api/albania/consumption/historical', methods=['GET'])
+def get_albania_consumption_historical():
+    """Merr konsumin historik për Shqipërinë (simulated)"""
+    import random
+    from datetime import datetime, timedelta
+    
+    hours = int(request.args.get('hours', 24))
+    data = []
+    base = 4500
+    for i in range(hours):
+        timestamp = datetime.utcnow() - timedelta(hours=hours-i-1)
+        consumption = round(base + random.uniform(-500, 1000), 2)
+        data.append({
+            'timestamp': timestamp.isoformat(),
+            'consumption_mwh': consumption
+        })
+    return jsonify({'status': 'success', 'data': data})
+
+@app.route('/api/albania/consumption/yearly', methods=['GET'])
+def get_albania_consumption_yearly():
+    """Merr konsumin vjetor për Shqipërinë (simulated)"""
+    import random
+    from_year = int(request.args.get('from_year', 2010))
+    to_year = int(request.args.get('to_year', datetime.utcnow().year))
+    
+    data = []
+    base = 4000
+    for year in range(from_year, to_year + 1):
+        consumption = round(base + (year - from_year) * 100 + random.uniform(-200, 200), 2)
+        data.append({'year': year, 'consumption_mwh': consumption})
+    return jsonify({'status': 'success', 'data': data})
+
+# Serbia API Endpoints
+@app.route('/api/serbia/weather', methods=['GET'])
+def get_serbia_weather():
+    """Merr të dhëna moti për Serbinë (simulated)"""
+    cities = ['Belgrade', 'Novi Sad', 'Niš', 'Kragujevac', 'Subotica']
+    return jsonify(generate_simulated_weather_data('Serbia', cities))
+
+@app.route('/api/serbia/weather/cities', methods=['GET'])
+def get_serbia_weather_cities():
+    """Merr listën e qyteteve të monitoruara për Serbinë"""
+    return jsonify({
+        'status': 'success',
+        'cities': ['Belgrade', 'Novi Sad', 'Niš', 'Kragujevac', 'Subotica']
+    })
+
+@app.route('/api/serbia/prices', methods=['GET'])
+def get_serbia_prices():
+    """Merr çmimet e energjisë për Serbinë (simulated)"""
+    return jsonify(generate_simulated_price_data('Serbia', 0.07))
+
+@app.route('/api/serbia/prices/historical', methods=['GET'])
+def get_serbia_prices_historical():
+    """Merr çmimet historike për Serbinë (simulated)"""
+    import random
+    from datetime import datetime, timedelta
+    
+    data = []
+    base_price = 0.07
+    for i in range(14):
+        date = datetime.utcnow() - timedelta(days=13-i)
+        price = round(base_price + random.uniform(-0.01, 0.02), 4)
+        data.append({
+            'date': date.strftime('%Y-%m-%d'),
+            'price_eur_per_kwh': price
+        })
+    return jsonify({'status': 'success', 'data': data})
+
+@app.route('/api/serbia/consumption', methods=['GET'])
+def get_serbia_consumption():
+    """Merr konsumin e energjisë për Serbinë (simulated)"""
+    return jsonify(generate_simulated_consumption_data('Serbia', 8000))
+
+@app.route('/api/serbia/consumption/historical', methods=['GET'])
+def get_serbia_consumption_historical():
+    """Merr konsumin historik për Serbinë (simulated)"""
+    import random
+    from datetime import datetime, timedelta
+    
+    hours = int(request.args.get('hours', 24))
+    data = []
+    base = 8000
+    for i in range(hours):
+        timestamp = datetime.utcnow() - timedelta(hours=hours-i-1)
+        consumption = round(base + random.uniform(-800, 1500), 2)
+        data.append({
+            'timestamp': timestamp.isoformat(),
+            'consumption_mwh': consumption
+        })
+    return jsonify({'status': 'success', 'data': data})
+
+@app.route('/api/serbia/consumption/yearly', methods=['GET'])
+def get_serbia_consumption_yearly():
+    """Merr konsumin vjetor për Serbinë (simulated)"""
+    import random
+    from_year = int(request.args.get('from_year', 2010))
+    to_year = int(request.args.get('to_year', datetime.utcnow().year))
+    
+    data = []
+    base = 7000
+    for year in range(from_year, to_year + 1):
+        consumption = round(base + (year - from_year) * 150 + random.uniform(-300, 300), 2)
+        data.append({'year': year, 'consumption_mwh': consumption})
+    return jsonify({'status': 'success', 'data': data})
+
+# Greece API Endpoints
+@app.route('/api/greece/weather', methods=['GET'])
+def get_greece_weather():
+    """Merr të dhëna moti për Greqinë (simulated)"""
+    cities = ['Athens', 'Thessaloniki', 'Patras', 'Heraklion', 'Larissa']
+    return jsonify(generate_simulated_weather_data('Greece', cities))
+
+@app.route('/api/greece/weather/cities', methods=['GET'])
+def get_greece_weather_cities():
+    """Merr listën e qyteteve të monitoruara për Greqinë"""
+    return jsonify({
+        'status': 'success',
+        'cities': ['Athens', 'Thessaloniki', 'Patras', 'Heraklion', 'Larissa']
+    })
+
+@app.route('/api/greece/prices', methods=['GET'])
+def get_greece_prices():
+    """Merr çmimet e energjisë për Greqinë (simulated)"""
+    return jsonify(generate_simulated_price_data('Greece', 0.12))
+
+@app.route('/api/greece/prices/historical', methods=['GET'])
+def get_greece_prices_historical():
+    """Merr çmimet historike për Greqinë (simulated)"""
+    import random
+    from datetime import datetime, timedelta
+    
+    data = []
+    base_price = 0.12
+    for i in range(14):
+        date = datetime.utcnow() - timedelta(days=13-i)
+        price = round(base_price + random.uniform(-0.02, 0.03), 4)
+        data.append({
+            'date': date.strftime('%Y-%m-%d'),
+            'price_eur_per_kwh': price
+        })
+    return jsonify({'status': 'success', 'data': data})
+
+@app.route('/api/greece/consumption', methods=['GET'])
+def get_greece_consumption():
+    """Merr konsumin e energjisë për Greqinë (simulated)"""
+    return jsonify(generate_simulated_consumption_data('Greece', 12000))
+
+@app.route('/api/greece/consumption/historical', methods=['GET'])
+def get_greece_consumption_historical():
+    """Merr konsumin historik për Greqinë (simulated)"""
+    import random
+    from datetime import datetime, timedelta
+    
+    hours = int(request.args.get('hours', 24))
+    data = []
+    base = 12000
+    for i in range(hours):
+        timestamp = datetime.utcnow() - timedelta(hours=hours-i-1)
+        consumption = round(base + random.uniform(-1000, 2000), 2)
+        data.append({
+            'timestamp': timestamp.isoformat(),
+            'consumption_mwh': consumption
+        })
+    return jsonify({'status': 'success', 'data': data})
+
+@app.route('/api/greece/consumption/yearly', methods=['GET'])
+def get_greece_consumption_yearly():
+    """Merr konsumin vjetor për Greqinë (simulated)"""
+    import random
+    from_year = int(request.args.get('from_year', 2010))
+    to_year = int(request.args.get('to_year', datetime.utcnow().year))
+    
+    data = []
+    base = 10000
+    for year in range(from_year, to_year + 1):
+        consumption = round(base + (year - from_year) * 200 + random.uniform(-400, 400), 2)
+        data.append({'year': year, 'consumption_mwh': consumption})
+    return jsonify({'status': 'success', 'data': data})
 
 @app.route('/api/v1/analytics/budget-calculator', methods=['GET'])
 def proxy_budget_calculator():

@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Çmimet e Energjisë - Kosovo | Smart Grid Analytics</title>
+    <title>Të Dhëna Moti - Serbia | Smart Grid Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="/static/css/simple-style.css?v=2.0">
     <link rel="stylesheet" href="/static/css/kosovo.css">
 </head>
 <body>
     <div class="container">
-            <div class="header">
-            <h1>⚡ Çmimet e Energjisë - Electricity</h1>
+        <div class="header">
+            <h1>🌤️ Të Dhëna Moti - Serbia</h1>
             <nav class="nav">
                 <a href="/">Dashboard</a>
                 <a href="/dashboard">Statistikat</a>
@@ -28,12 +28,12 @@
     </div>
 </div>
                 <div class="nav-dropdown">
-    <button class="nav-dropbtn active">⚡ Kosovo ▾</button>
+    <button class="nav-dropbtn active">⚡ Serbia ▾</button>
     <div class="nav-dropdown-content">
-        <a href="/kosovo">Përmbledhje</a>
-        <a href="/kosovo/prices" class="active">Çmimet</a>
-        <a href="/kosovo/consumption">Konsumi</a>
-        <a href="/kosovo/weather">Moti</a>
+        <a href="/serbia">Përmbledhje</a>
+        <a href="/serbia/prices">Çmimet</a>
+        <a href="/serbia/consumption">Konsumi</a>
+        <a href="/serbia/weather" class="active">Moti</a>
     </div>
 </div>
             </nav>
@@ -42,33 +42,32 @@
         <main>
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3>📊 Krahasimi i Çmimeve</h3>
+                    <h3>🌡️ Temperatura për Qytetet e Serbisë</h3>
                     <button class="btn" onclick="refreshData()">🔄 Refresh</button>
                 </div>
                 <div class="chart-container">
-                    <canvas id="pricesChart"></canvas>
+                    <canvas id="temperatureChart"></canvas>
                 </div>
             </div>
             
-            <div class="card">
-                <h3>💰 Detajet e Çmimeve</h3>
-                <div id="pricesDetails" class="data-summary">
-                    <p>Duke ngarkuar...</p>
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h3>📊 Detajet e Qyteteve</h3>
+                    <div id="citiesDetails" class="data-summary">
+                        <p>Duke ngarkuar...</p>
+                    </div>
                 </div>
-            </div>
-
-            <div class="card">
-                <h3>📉 Trendi Afatgjatë i Çmimeve (2010–sot)</h3>
-                <div class="chart-container">
-                    <canvas id="pricesTrendChart"></canvas>
-                </div>
-                <div id="pricesTrendSummary" class="data-summary">
-                    <p>Duke ngarkuar trendin historik...</p>
+                
+                <div class="card">
+                    <h3>💨 Shpejtësia e Erës</h3>
+                    <div class="chart-container">
+                        <canvas id="windChart"></canvas>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
     
-    <script src="/static/js/kosovo-prices.js"></script>
+    <script src="/static/js/serbia-weather.js"></script>
 </body>
 </html>

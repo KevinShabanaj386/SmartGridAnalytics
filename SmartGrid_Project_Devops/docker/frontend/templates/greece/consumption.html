@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Konsumi i Energjisë - Kosovo | Smart Grid Analytics</title>
+    <title>Konsumi i Energjisë - Greece | Smart Grid Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="/static/css/simple-style.css?v=2.0">
     <link rel="stylesheet" href="/static/css/kosovo.css">
 </head>
 <body>
     <div class="container">
-                <div class="header">
-            <h1>📊 Konsumi i Energjisë - Electricity</h1>
+        <div class="header">
+            <h1>📊 Konsumi i Energjisë - Greece</h1>
             <nav class="nav">
                 <a href="/">Dashboard</a>
                 <a href="/dashboard">Statistikat</a>
@@ -28,12 +28,12 @@
     </div>
 </div>
                 <div class="nav-dropdown">
-    <button class="nav-dropbtn active">⚡ Kosovo ▾</button>
+    <button class="nav-dropbtn active">⚡ Greece ▾</button>
     <div class="nav-dropdown-content">
-        <a href="/kosovo">Përmbledhje</a>
-        <a href="/kosovo/prices">Çmimet</a>
-        <a href="/kosovo/consumption" class="active">Konsumi</a>
-        <a href="/kosovo/weather">Moti</a>
+        <a href="/greece">Përmbledhje</a>
+        <a href="/greece/prices">Çmimet</a>
+        <a href="/greece/consumption" class="active">Konsumi</a>
+        <a href="/greece/weather">Moti</a>
     </div>
 </div>
             </nav>
@@ -46,7 +46,7 @@
                     <div>
                         <input type="number" id="hoursInput" value="24" min="1" max="168" style="width: 80px; padding: 5px; margin-right: 10px;">
                         <button class="btn" onclick="loadHistorical()">Shiko Historikun</button>
-                        <button class="btn" onclick="loadYearlyHistory()">Trend 2010–sot</button>
+                        <button class="btn" onclick="loadYearlyHistory()">Trend Historik</button>
                         <button class="btn" onclick="refreshData()">🔄 Refresh</button>
                     </div>
                 </div>
@@ -69,13 +69,13 @@
                         <canvas id="historicalChart"></canvas>
                     </div>
                     <div id="consumptionTrendSummary" class="data-summary">
-                        <p>Përdor butonin "Trend 2010–sot" për të parë zhvillimin afatgjatë.</p>
+                        <p>Përdor butonin "Trend Historik" për të parë zhvillimin afatgjatë.</p>
                     </div>
                 </div>
             </div>
         </main>
     </div>
     
-    <script src="/static/js/kosovo-consumption.js"></script>
+    <script src="/static/js/greece-consumption.js"></script>
 </body>
 </html>
