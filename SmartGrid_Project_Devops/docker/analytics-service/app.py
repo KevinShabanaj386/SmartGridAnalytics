@@ -262,7 +262,7 @@ def health_check():
     }), 200
 
 @app.route('/api/v1/analytics/sensor/stats', methods=['GET'])
-@cache_result(ttl=10)  # Cache për 10 sekonda (reduced for real-time updates)
+#@cache_result(ttl=10)  # Cache për 10 sekonda (reduced for real-time updates)
 def get_sensor_statistics():
     """
     Kthen statistikat për sensorët
@@ -292,19 +292,19 @@ def get_sensor_statistics():
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
-        query = """
-            SELECT 
-                sensor_id,
-                sensor_type,
-                AVG(value) as avg_value,
-                MIN(value) as min_value,
-                MAX(value) as max_value,
-                STDDEV(value) as stddev_value,
-                COUNT(*) as count
-            FROM sensor_data
-            WHERE timestamp >= NOW() - INTERVAL '%s hours'
-        """
-        params = [hours]
+       query = """
+    SELECT 
+        sensor_id,
+        sensor_type,
+        AVG(value) as avg_value,
+        MIN(value) as min_value,
+        MAX(value) as max_value,
+        STDDEV(value) as stddev_value,
+        COUNT(*) as count
+    FROM sensor_data
+    WHERE 1 = 1
+"""
+params = []
         logger.debug(f"Executing query with hours={hours}, params={params}")
         
         if sensor_id:
@@ -338,7 +338,7 @@ def get_sensor_statistics():
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
 @app.route('/api/v1/analytics/predictive/load-forecast', methods=['GET'])
-@cache_result(ttl=600)  # Cache për 10 minuta
+#@cache_result(ttl=600)  # Cache për 10 minuta
 def predict_load_forecast():
     """
     Parashikon ngarkesën për orët e ardhshme bazuar në të dhënat historike
@@ -593,12 +593,14 @@ def detect_anomalies():
     Query params: sensor_id, threshold (default: 3 standard deviations)
     """
     try:
+        from decimal import Decimal
+
         sensor_id = request.args.get('sensor_id')
         threshold = float(request.args.get('threshold', 3.0))
-        
+
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
+
         query = """
             SELECT 
                 event_id,
@@ -610,65 +612,87 @@ def detect_anomalies():
             WHERE timestamp >= NOW() - INTERVAL '24 hours'
         """
         params = []
-        
+
         if sensor_id:
             query += " AND sensor_id = %s"
             params.append(sensor_id)
-        
+
         query += " ORDER BY timestamp DESC LIMIT 1000"
-        
+
         cursor.execute(query, params)
         data = cursor.fetchall()
-        
+
         if not data:
             return jsonify({
                 'status': 'success',
                 'anomalies': [],
                 'message': 'No data available'
             }), 200
-        
-        # Llogarit statistikat
-        values = [row['value'] for row in data]
-        mean = statistics.mean(values)
-        stddev = statistics.stdev(values) if len(values) > 1 else 0
-        
-        # Identifikon anomalitë (z-score > threshold)
+
+        # ---- normalize to float for statistics ----
+        values: list[float] = []
+        for row in data:
+            v = row.get('value')
+            if isinstance(v, Decimal):
+                values.append(float(v))
+            elif isinstance(v, (int, float)):
+                values.append(float(v))
+            else:
+                # skip non-numeric
+                continue
+
+        if not values:
+            return jsonify({
+                'status': 'success',
+                'anomalies': [],
+                'message': 'No numeric data available'
+            }), 200
+
+        mean = float(statistics.mean(values))
+        stddev = float(statistics.stdev(values)) if len(values) > 1 else 0.0
+
+        # ---- compute anomalies using floats only ----
         anomalies = []
         for row in data:
-            z_score = abs((row['value'] - mean) / stddev) if stddev > 0 else 0
+            raw_value = row.get('value')
+            if isinstance(raw_value, Decimal):
+                value = float(raw_value)
+            elif isinstance(raw_value, (int, float)):
+                value = float(raw_value)
+            else:
+                continue
+
+            z_score = abs((value - mean) / stddev) if stddev > 0 else 0.0
             if z_score > threshold:
                 anomalies.append({
                     'event_id': row['event_id'],
                     'sensor_id': row['sensor_id'],
                     'sensor_type': row['sensor_type'],
-                    'value': float(row['value']),
+                    'value': value,
                     'expected_range': {
                         'min': mean - threshold * stddev,
                         'max': mean + threshold * stddev
                     },
                     'z_score': round(z_score, 2),
-                    'timestamp': row['timestamp'].isoformat() if hasattr(row['timestamp'], 'isoformat') else str(row['timestamp'])
+                    'timestamp': row['timestamp'].isoformat()
+                        if hasattr(row['timestamp'], 'isoformat')
+                        else str(row['timestamp'])
                 })
-        
+
         cursor.close()
         conn.close()
-        
-        # Përdor Random Forest nëse është i disponueshëm dhe kërkohet
+
+        # Optional ML path (unchanged, still runs if enabled)
         use_ml = request.args.get('use_ml', 'false').lower() == 'true'
-        
+
         if use_ml and RF_ANOMALY_AVAILABLE:
             try:
-                # Konverto në DataFrame
                 import pandas as pd
                 df = pd.DataFrame([dict(row) for row in data])
-                
-                # Zbulo anomalies me Random Forest
+
                 df_with_anomalies = detect_anomalies_with_rf(df)
-                
-                # Filtro vetëm anomalies
                 anomalies_df = df_with_anomalies[df_with_anomalies['is_anomaly'] == True]
-                
-                # Konverto në format për response
+
                 ml_anomalies = []
                 for _, row in anomalies_df.iterrows():
                     ml_anomalies.append({
@@ -676,11 +700,15 @@ def detect_anomalies():
                         'sensor_id': row.get('sensor_id', ''),
                         'sensor_type': row.get('sensor_type', ''),
                         'value': float(row.get('value', 0)),
-                        'anomaly_probability': round(float(row.get('anomaly_probability', 0)) * 100, 2),
+                        'anomaly_probability': round(
+                            float(row.get('anomaly_probability', 0)) * 100, 2
+                        ),
                         'anomaly_type': row.get('anomaly_type', 'unknown'),
-                        'timestamp': row.get('timestamp').isoformat() if hasattr(row.get('timestamp'), 'isoformat') else str(row.get('timestamp'))
+                        'timestamp': row.get('timestamp').isoformat()
+                            if hasattr(row.get('timestamp'), 'isoformat')
+                            else str(row.get('timestamp'))
                     })
-                
+
                 return jsonify({
                     'status': 'success',
                     'anomalies': ml_anomalies,
@@ -693,11 +721,13 @@ def detect_anomalies():
                         'stddev': round(stddev, 2)
                     }
                 }), 200
-                
+
             except Exception as e:
-                logger.warning(f"Random Forest anomaly detection failed, using z-score: {str(e)}")
-                # Fallback në z-score method
-        
+                logger.warning(
+                     f"Random Forest anomaly detection failed, using z-score: {str(e)}"
+                )
+                # fall back to z-score
+
         return jsonify({
             'status': 'success',
             'anomalies': anomalies,
@@ -710,7 +740,7 @@ def detect_anomalies():
                 'threshold': threshold
             }
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error detecting anomalies: {str(e)}")
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500

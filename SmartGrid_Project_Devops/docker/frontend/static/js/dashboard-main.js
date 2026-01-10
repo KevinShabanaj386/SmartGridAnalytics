@@ -131,7 +131,7 @@ async function loadStats() {
         authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
         // Add cache-busting to ensure fresh data
         const cacheBuster = `&_t=${Date.now()}`;
-        const response = await fetch(`/api/sensor-stats?hours=24${cacheBuster}`, {
+        const response = await fetch(`/api/sensor-stats?hours=168${cacheBuster}`, {
             headers: {
                 'Authorization': `Bearer ${authToken}`,
                 'Cache-Control': 'no-cache'
@@ -271,7 +271,7 @@ async function loadSensorStats() {
     try {
         // Refresh token again right before the call
         authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-        const response = await fetch('/api/sensor-stats?hours=24', {
+        const response = await fetch('/api/sensor-stats?hours=168', {
             headers: {'Authorization': `Bearer ${authToken}`}
         });
         const data = await response.json();
@@ -343,7 +343,7 @@ async function loadRealtimeData() {
         authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
         // Add cache-busting for realtime data
         const cacheBuster = `&_t=${Date.now()}`;
-        const response = await fetch(`/api/sensor-stats?hours=1${cacheBuster}`, {
+        const response = await fetch(`/api/sensor-stats?hours=168${cacheBuster}`, {
             headers: {
                 'Authorization': `Bearer ${authToken}`,
                 'Cache-Control': 'no-cache'
@@ -477,7 +477,7 @@ async function loadRecentData(limit = 10) {
         authToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
         // Add cache-busting timestamp to ensure fresh data
         const cacheBuster = `&_t=${Date.now()}`;
-        const response = await fetch(`/api/sensor-stats?hours=24${cacheBuster}`, {
+       const response = await fetch(`/api/sensor-stats?hours=168${cacheBuster}`, {
             headers: {
                 'Authorization': `Bearer ${authToken}`,
                 'Cache-Control': 'no-cache, no-store, must-revalidate',

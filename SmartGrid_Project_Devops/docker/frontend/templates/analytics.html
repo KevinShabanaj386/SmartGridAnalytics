@@ -513,13 +513,13 @@
                 data: {
                     labels: trends.map(t => new Date(t.date).toLocaleDateString()),
                     datasets: [{
-                        label: 'Konsum Total (kWh)',
-                        data: trends.map(t => t.total_consumption),
-                        borderColor: 'rgb(118, 75, 162)',
-                        backgroundColor: 'rgba(118, 75, 162, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }]
+    label: 'Konsum Total (kWh)',
+    data: trends.map(t => t.total_consumption_kwh),
+    borderColor: 'rgb(118, 75, 162)',
+    backgroundColor: 'rgba(118, 75, 162, 0.1)',
+    tension: 0.4,
+    fill: true
+}]
                 },
                 options: {
                     responsive: true,
